@@ -1,0 +1,283 @@
+local Toggler = {}
+
+local function display_width(value)
+  if value == nil or value == "" then
+    return 0
+  end
+  -- strdisplaywidth respects East Asian width similar to original logic
+  return vim.fn.strdisplaywidth(value)
+end
+
+local function strip_indent(line)
+  local indent = line:match("^%s*") or ""
+  return indent, line:sub(#indent + 1)
+end
+
+local function longest_common_indent(indents)
+  if #indents == 0 then
+    return ""
+  end
+  local prefix = indents[1]
+  for idx = 2, #indents do
+    local target = indents[idx]
+    local common = {}
+    for i = 1, math.min(#prefix, #target) do
+      if prefix:sub(i, i) ~= target:sub(i, i) then
+        break
+      end
+      common[#common + 1] = prefix:sub(i, i)
+    end
+    prefix = table.concat(common)
+    if prefix == "" then
+      break
+    end
+  end
+  return prefix
+end
+
+local function is_line_commented(line, info)
+  info = info or {}
+  local indent, body = strip_indent(line)
+  local target = body:gsub("^%s*", "")
+  if target == "" then
+    return false
+  end
+  local prefix = (info.prefix or ""):gsub("%s*$", "")
+  return prefix ~= "" and target:sub(1, #prefix) == prefix
+end
+
+local function remove_line_comment(line, info)
+  info = info or {}
+  local indent, body = strip_indent(line)
+  local trimmed_prefix = (info.prefix or ""):gsub("%s*$", "")
+  local trimmed = body:gsub("^%s*", "")
+  if trimmed_prefix == "" or trimmed:sub(1, #trimmed_prefix) ~= trimmed_prefix then
+    return line
+  end
+  local start_idx = body:find(trimmed_prefix, 1, true)
+  if not start_idx then
+    return line
+  end
+  local rest = body:sub(start_idx + #trimmed_prefix)
+  rest = rest:gsub("^%s", "")
+  return indent .. rest
+end
+
+local function align_line_comments(lines, infos)
+  local entries = {}
+  local indents = {}
+  for idx, line in ipairs(lines) do
+    local indent, body = strip_indent(line)
+    entries[idx] = { indent = indent, body = body }
+    indents[idx] = indent
+  end
+  local shared_indent = longest_common_indent(indents)
+  local primary
+  for _, info in ipairs(infos) do
+    if info and info.mode == "line" then
+      primary = info
+      break
+    end
+  end
+  primary = primary or infos[1] or { prefix = "", suffix = "", mode = "line" }
+  local output = {}
+  for idx, entry in ipairs(entries) do
+    local info = infos[idx]
+    if not (info and info.mode == "line") then
+      info = primary
+    end
+    local rest = entry.indent:sub(#shared_indent + 1) .. entry.body
+    local pad = rest ~= "" and " " or ""
+    output[idx] = string.format("%s%s%s%s", shared_indent, info.prefix or "", pad, rest)
+  end
+  return output
+end
+
+local function is_block_commented(line, info)
+  info = info or {}
+  local trimmed = vim.trim(line)
+  local prefix = info.prefix or ""
+  local suffix = info.suffix or ""
+  return trimmed:sub(1, #prefix) == prefix and trimmed:sub(-#suffix) == suffix
+end
+
+local function remove_block_comment(line, info)
+  info = info or {}
+  local trimmed = vim.trim(line)
+  local prefix = info.prefix or ""
+  local suffix = info.suffix or ""
+  if prefix == "" or suffix == "" then
+    return line
+  end
+  if trimmed:sub(1, #prefix) ~= prefix or trimmed:sub(-#suffix) ~= suffix then
+    return line
+  end
+  local inner = trimmed:sub(#prefix + 1, #trimmed - #suffix)
+  inner = vim.trim(inner)
+  local indent = line:match("^%s*") or ""
+  return indent .. inner
+end
+
+local function add_block_comments(lines, infos)
+  local stripped = {}
+  local indents = {}
+  for idx, line in ipairs(lines) do
+    local indent, body = strip_indent(line)
+    stripped[idx] = { indent = indent, body = body }
+    indents[idx] = indent
+  end
+  local shared_indent = longest_common_indent(indents)
+  local bodies = {}
+  for idx, entry in ipairs(stripped) do
+    bodies[idx] = entry.indent:sub(#shared_indent + 1) .. entry.body
+  end
+  local widths = {}
+  local max_width = 0
+  for idx, body in ipairs(bodies) do
+    local width = display_width(body)
+    widths[idx] = width
+    if width > max_width then
+      max_width = width
+    end
+  end
+  local output = {}
+  for idx, body in ipairs(bodies) do
+    local info = infos[idx] or infos[1] or { prefix = "", suffix = "" }
+    local prefix_pad = body ~= "" and " " or ""
+    local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
+    local suffix_pad = string.rep(" ", suffix_pad_length)
+    local content =
+      string.format("%s%s%s%s%s%s", shared_indent, info.prefix or "", prefix_pad, body, suffix_pad, info.suffix or "")
+    output[idx] = content:gsub("%s+$", "")
+  end
+  return output
+end
+
+local function segment_modes(infos)
+  local modes = {}
+  for idx, info in ipairs(infos) do
+    if info and info.mode == "block" then
+      modes[idx] = "block"
+    else
+      modes[idx] = "line"
+    end
+  end
+  return modes
+end
+
+local function run_line_mode(lines, infos)
+  local default_info = infos[1] or { prefix = "", suffix = "", mode = "line" }
+  local already = true
+  for idx, line in ipairs(lines) do
+    if not is_line_commented(line, infos[idx] or default_info) then
+      already = false
+      break
+    end
+  end
+  local updated
+  if already then
+    updated = {}
+    for idx, line in ipairs(lines) do
+      updated[idx] = remove_line_comment(line, infos[idx] or default_info)
+    end
+  else
+    updated = align_line_comments(lines, infos)
+  end
+  return { lines = updated, already = already }
+end
+
+local function run_block_mode(lines, infos)
+  local primary
+  for _, info in ipairs(infos) do
+    if info and info.mode == "block" then
+      primary = info
+      break
+    end
+  end
+  primary = primary or infos[1] or { prefix = "", suffix = "", mode = "block" }
+  local block_infos = {}
+  for idx = 1, #infos do
+    local info = infos[idx]
+    if info and info.mode == "block" then
+      block_infos[idx] = info
+    else
+      block_infos[idx] = primary
+    end
+  end
+  local already = true
+  for idx, line in ipairs(lines) do
+    if not is_block_commented(line, block_infos[idx]) then
+      already = false
+      break
+    end
+  end
+  local updated
+  if already then
+    updated = {}
+    for idx, line in ipairs(lines) do
+      updated[idx] = remove_block_comment(line, block_infos[idx])
+    end
+  else
+    updated = add_block_comments(lines, block_infos)
+  end
+  return { lines = updated, already = already }
+end
+
+local function run_uniform_mode(mode, lines, infos)
+  if mode == "block" then
+    return run_block_mode(lines, infos)
+  end
+  return run_line_mode(lines, infos)
+end
+
+local function run_mixed_mode(lines, infos)
+  local modes = segment_modes(infos)
+  local segments = {}
+  local start_idx = 1
+  local current = modes[1] or "line"
+  for idx = 2, #modes do
+    if modes[idx] ~= current then
+      segments[#segments + 1] = { start = start_idx, finish = idx - 1, mode = current }
+      start_idx = idx
+      current = modes[idx]
+    end
+  end
+  segments[#segments + 1] = { start = start_idx, finish = #modes, mode = current }
+
+  local output = vim.deepcopy(lines)
+  local all_already = true
+  for _, segment in ipairs(segments) do
+    local slice_lines = {}
+    local slice_infos = {}
+    for idx = segment.start, segment.finish do
+      slice_lines[#slice_lines + 1] = lines[idx]
+      slice_infos[#slice_infos + 1] = infos[idx]
+    end
+    local result = run_uniform_mode(segment.mode, slice_lines, slice_infos)
+    for idx = 0, #result.lines - 1 do
+      output[segment.start + idx] = result.lines[idx + 1]
+    end
+    all_already = all_already and result.already
+  end
+
+  return { lines = output, already = all_already }
+end
+
+function Toggler.toggle_lines(lines, infos, preferred, mixed_policy)
+  if not lines or #lines == 0 then
+    return { lines = lines or {}, action = "comment" }
+  end
+  infos = infos or {}
+  mixed_policy = mixed_policy or "mixed"
+
+  if mixed_policy == "mixed" then
+    local result = run_mixed_mode(lines, infos)
+    return { lines = result.lines, action = result.already and "uncomment" or "comment" }
+  end
+
+  local target_mode = mixed_policy == "block" and "block" or "line"
+  local result = run_uniform_mode(target_mode, lines, infos)
+  return { lines = result.lines, action = result.already and "uncomment" or "comment" }
+end
+
+return Toggler

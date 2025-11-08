@@ -1,8 +1,0 @@
-{
-  "lock": false,
-  "fmt": {
-    "files": {
-      "exclude": ["**/*.md", "**/*.json"]
-    }
-  }
-}

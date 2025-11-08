@@ -13,9 +13,9 @@ Tree-sitter aware commenting for Neovim 0.11+. `cmt.nvim` exposes the classic `g
 ## Requirements
 
 - Neovim 0.11+
-- [vim-denops/denops.vim](https://github.com/vim-denops/denops.vim)
 - [nvim-treesitter/nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)
 - [JoosepAlviste/nvim-ts-context-commentstring](https://github.com/JoosepAlviste/nvim-ts-context-commentstring)
+- (Dev/testing) [nvim-lua/plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
 
 Fallbacks ensure that `gc` always delegates to Neovim's built-in implementation if Tree-sitter or `commentstring` are missing. `gw` reports a descriptive error when block delimiters cannot be resolved.
 
@@ -27,7 +27,6 @@ return {
     "yuki-yano/cmt.nvim",
     version = false,
     dependencies = {
-      "vim-denops/denops.vim",
       "nvim-treesitter/nvim-treesitter",
       "JoosepAlviste/nvim-ts-context-commentstring",
     },
@@ -107,14 +106,14 @@ So TSX/JSX-like buffers prefer block comments while everything else stays mixed.
 ## Development
 
 ```bash
-# run unit tests for core toggling logic
-$ deno test denops/cmt/core/line_toggle_test.ts
+# run unit tests for the toggler logic (requires plenary.nvim on 'runtimepath')
+$ nvim --headless -c "PlenaryBustedDirectory lua/cmt/tests" -c qa
 ```
 
-The implementation follows Denops (TypeScript) + Lua bridges, so changes typically involve:
+The implementation is now entirely Lua-based:
 
-1. Vimscript (`plugin/cmt.vim`) for `<Plug>` glue and operatorfunc wiring
-2. Lua (`lua/cmt/ops.lua`, `lua/cmt/commentstring.lua`) for runtime orchestration and Tree-sitter lookups
-3. Denops TypeScript (`denops/cmt/...`) for buffer operations and cross-language batching
+1. Vimscript (`plugin/cmt.vim`) defines the `<Plug>` mappings and `operatorfunc` entrypoints.
+2. Lua (`lua/cmt/ops.lua`) orchestrates user input, logging, and fallbacks.
+3. Lua (`lua/cmt/service.lua`, `lua/cmt/commentstring.lua`, `lua/cmt/toggler.lua`) performs buffer edits, commentstring resolution, and formatting.
 
-PRs should follow the TypeScript coding guidelines defined in `tmp/ai/cmt-nvim-requirements-v0.3.md` (arrow functions, `unknownutil` guards, latest `jsr:` deps, etc.).
+PRs should follow the existing Lua style (stylua-compatible formatting, unit tests alongside logic changes).
