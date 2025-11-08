@@ -86,3 +86,32 @@ Deno.test("falls back to block markers when only block mode is available", () =>
     "{/* </div>              */}",
   ]);
 });
+
+Deno.test("mixed comment modes obey policy", () => {
+  const lines = [
+    "<div>",
+    "  className",
+  ];
+  const infos = [
+    makeInfo("block", "{/*", "*/}"),
+    makeInfo("line", "//"),
+  ];
+
+  const mixedPreferred = toggleLines(lines, infos, "line", "mixed");
+  assertEquals(mixedPreferred.lines, [
+    "{/* <div> */}",
+    "  // className",
+  ]);
+
+  const blockPreferred = toggleLines(lines, infos, "line", "block");
+  assertEquals(blockPreferred.lines, [
+    "{/* <div>       */}",
+    "{/*   className */}",
+  ]);
+
+  const linePreferred = toggleLines(lines, infos, "line", "line");
+  assertEquals(linePreferred.lines, [
+    "// <div>",
+    "//   className",
+  ]);
+});

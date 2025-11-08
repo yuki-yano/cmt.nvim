@@ -50,6 +50,7 @@ const toggleRange = async (
   denops: Denops,
   preferredKind: 'line' | 'block',
   range: { start_line: number; end_line: number },
+  mixedPolicy: 'line' | 'block' | 'mixed',
 ): Promise<{ status: string; payload?: Record<string, unknown> }> => {
   const start = Math.max(range.start_line, 1);
   const finish = Math.max(range.end_line, start);
@@ -62,7 +63,7 @@ const toggleRange = async (
   if (needsFallback(infos)) {
     return { status: 'fallback', payload: { mode: 'line', reason: fallbackReason(infos) } };
   }
-  const result = toggleLines(lines, infos, preferredKind);
+  const result = toggleLines(lines, infos, preferredKind, mixedPolicy);
   await denops.call('nvim_buf_set_lines', bufnr, start - 1, finish, false, result.lines);
   return { status: 'ok', payload: { action: result.action } };
 };
@@ -94,9 +95,13 @@ export const main = async (denops: Denops): Promise<void> => {
     toggle: async (payload): Promise<unknown> => {
       const target = payload as {
         preferred_kind: 'line' | 'block';
+        mode_policy?: 'line' | 'block' | 'mixed';
         range: { start_line: number; end_line: number };
       };
-      return await toggleRange(denops, target.preferred_kind, target.range);
+      const policy = target.mode_policy === 'line' || target.mode_policy === 'block'
+        ? target.mode_policy
+        : 'mixed';
+      return await toggleRange(denops, target.preferred_kind, target.range, policy);
     },
     openComment: async (payload): Promise<unknown> => {
       const target = payload as { direction: 'above' | 'below' };

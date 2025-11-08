@@ -61,6 +61,27 @@ local function fallback_gc(mode)
   vim.api.nvim_feedkeys(rhs, 'n', true)
 end
 
+local function resolve_mixed_policy(kind)
+  if kind == 'block' then
+    return 'block'
+  end
+  local ft = vim.bo.filetype or ''
+  local store = vim.g.cmt_mixed_mode_policy
+  local value
+  if type(store) == 'table' then
+    value = store[ft] or store.default or store['*']
+  elseif type(store) == 'string' then
+    value = store
+  end
+  if type(value) == 'string' then
+    value = string.lower(value)
+  end
+  if value == 'block' or value == 'line' or value == 'mixed' then
+    return value
+  end
+  return 'mixed'
+end
+
 local function format_reason(payload)
   if type(payload) ~= 'table' then
     return ''
@@ -135,6 +156,7 @@ function Ops._operator(type)
   local end_pos = vim.fn.getpos("']")
   dispatch({
     preferred_kind = state.pending_kind or 'line',
+    mode_policy = resolve_mixed_policy(state.pending_kind or 'line'),
     scope = type == 'line' and 'line' or 'operator',
     range = {
       start_line = start_pos[2],
@@ -149,6 +171,7 @@ function Ops.visual(kind)
   leave_visual_if_needed(mode)
   dispatch({
     preferred_kind = kind,
+    mode_policy = resolve_mixed_policy(kind),
     scope = 'visual',
     range = {
       start_line = start_line,
@@ -165,6 +188,7 @@ function Ops.current(kind)
   local line = vim.fn.line('.')
   dispatch({
     preferred_kind = kind,
+    mode_policy = resolve_mixed_policy(kind),
     scope = 'current',
     range = {
       start_line = line,

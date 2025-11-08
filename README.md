@@ -39,7 +39,7 @@ return {
 If some filetypes should bypass cmt.nvim (for different commenting plugins, etc.) set:
 
 ```lua
-vim.g.cmt_disabled_filetypes = { "minisnip", "csv" }
+vim.g.cmt_disabled_filetypes = { "csv" }
 ```
 
 ## Usage
@@ -53,12 +53,48 @@ vim.g.cmt_disabled_filetypes = { "minisnip", "csv" }
 
 Global variables exposed by cmt.nvim:
 
+### Mixed Comment Mode Policy
+
+Use `g:cmt_mixed_mode_policy` to control how mixed block/line contexts are resolved when `gc` or `gw` runs.
+
+- Default is `"line"` (line comments win when both modes exist).
+- Accepts either a string or a table:
+  - String: global policy (`"line"` or `"block"`).
+  - Table: per-filetype override. Keys follow Neovim filetype names (e.g. `tsx`, `jsx`, `typescriptreact`). Provide `default` or `*` for fallback.
+- Allowed values: `"line"` or `"block"`.
+
+Example (prefer block for TSX/JSX, keep mixed elsewhere):
+
+```lua
+vim.g.cmt_mixed_mode_policy = {
+  tsx = "block",
+  jsx = "block",
+  default = "mixed",
+}
+```
+
+> Tip: For React TypeScript files the filetype is often `typescriptreact`, so use that key if needed. By default TSX (`tsx`) / JSX (`jsx`) benefit most from `"block"` to keep `{/* ... */}` paired.
+
+By default, cmt.nvim sets:
+
+```lua
+vim.g.cmt_mixed_mode_policy = {
+  typescriptreact = "block",
+  javascriptreact = "block",
+  default = "mixed",
+}
+```
+
+So TSX/JSX-like buffers prefer block comments while everything else stays mixed. Override this table if needed.
+
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `g:cmt_block_fallback` | `{}` | Per-filetype `{ line = "// %s", block = { "/*", "*/" } }` fallback map. |
 | `g:cmt_disabled_filetypes` | `{}` | Filetypes that should bypass cmt.nvim (`gc` delegates to Neovim, `gw` emits an error). |
 | `g:cmt_log_level` | `"warn"` | Controls logging verbosity (`error`, `warn`, `info`, `debug`). |
 | `g:cmt_eol_insert_pad_space` | `true` | Adds a space after `gco/gcO` leaders so dot-repeat stays aligned. |
+| `g:cmt_mixed_mode_policy` | `"mixed"` | Dict or string controlling how mixed block/line contexts resolve (`"block"` or `"line"`; accepts `{ tsx = "block", default = "line" }`). |
 
 ## Development
 

@@ -3,6 +3,14 @@ if exists('g:loaded_cmt_vim')
 endif
 let g:loaded_cmt_vim = 1
 
+if !exists('g:cmt_mixed_mode_policy')
+  let g:cmt_mixed_mode_policy = {
+        \ 'typescriptreact': 'block',
+        \ 'javascriptreact': 'block',
+        \ 'default': 'mixed',
+        \ }
+endif
+
 let s:cmt_root = expand('<sfile>:p:h:h')
 function! s:cmt_register() abort
   if exists('*denops#plugin#register')
