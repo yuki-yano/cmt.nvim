@@ -1,6 +1,14 @@
 # cmt.nvim
 
-Tree-sitter aware commenting for Neovim 0.11+. `cmt.nvim` reproduces `gc/gcc/gw/gww/gco/gcO` style workflows while respecting embedded languages and falling back to Neovim's built-in comment operator whenever Tree-sitter data is unavailable.
+Tree-sitter aware commenting for Neovim 0.11+. `cmt.nvim` exposes the classic `gc/gcc/gw/gww/gco/gcO` motions as `<Plug>` mappings, but resolves comment leaders per line using Tree-sitter. When commentstring data is missing, it automatically falls back to Neovim's built-in operators so the basic workflow always works.
+
+## Features
+
+- **Tree-sitter aware line/block toggles**: `gc`/`gw` (and their `gcc`/`gww` forms) resolve the correct commentstring per line via `nvim-ts-context-commentstring`, falling back to Neovim's built-in `gc` when data is missing.
+- **Visual/operator integrations**: Visual selections, text-objects (`<Plug>(cmt:textobj-line-i/a)`), and operator-pending motions are supported; repeated `gc` respects existing comments.
+- **Comment line opening**: `gco` / `gcO` variants insert properly formatted comment leaders (`g:cmt_eol_insert_pad_space` controls extra padding) with Tree-sitter-aware prefixes.
+- **Diagnostics & fallbacks**: `:CmtInfo` reports current commentstrings, fallbacks log clearly, and disabled filetypes transparently delegate to stock `gc`.
+- **Mixed-mode control**: `g:cmt_mixed_mode_policy` lets you decide how mixed line/block regions are handled (`mixed` per-line, or force `block`/`line` uniformly). Default prefers block for React (`typescriptreact`/`javascriptreact`) and mixed elsewhere.
 
 ## Requirements
 
@@ -94,7 +102,7 @@ So TSX/JSX-like buffers prefer block comments while everything else stays mixed.
 | `g:cmt_disabled_filetypes` | `{}` | Filetypes that should bypass cmt.nvim (`gc` delegates to Neovim, `gw` emits an error). |
 | `g:cmt_log_level` | `"warn"` | Controls logging verbosity (`error`, `warn`, `info`, `debug`). |
 | `g:cmt_eol_insert_pad_space` | `true` | Adds a space after `gco/gcO` leaders so dot-repeat stays aligned. |
-| `g:cmt_mixed_mode_policy` | `"mixed"` | Dict or string controlling how mixed block/line contexts resolve (`"block"` or `"line"`; accepts `{ tsx = "block", default = "line" }`). |
+| `g:cmt_mixed_mode_policy` | `"mixed"` | Dict or string controlling how mixed contexts resolve (`"mixed"`, `"block"`, or `"line"`; accepts `{ tsx = "block", default = "mixed" }`). |
 
 ## Development
 
