@@ -5,21 +5,39 @@ local Service = {}
 
 local function enumerate_locations(start_line, lines)
   local locations = {}
+  local mapping = {}
   for idx, text in ipairs(lines) do
     local first = text:find("%S")
-    local column = first and (first - 1) or 0
-    locations[idx] = {
-      line = start_line + idx - 1,
-      column = column,
-    }
+    if first then
+      local column = first - 1
+      locations[#locations + 1] = {
+        line = start_line + idx - 1,
+        column = column,
+      }
+      mapping[#locations] = idx
+    end
   end
-  return locations
+  return locations, mapping
 end
 
 local function fetch_comment_infos(bufnr, start_line, lines, preferred_kind)
-  local locations = enumerate_locations(start_line, lines)
-  local infos = commentstring.batch_get(bufnr, locations, preferred_kind or "line")
-  return infos or {}
+  local locations, mapping = enumerate_locations(start_line, lines)
+  local fetched
+  if #locations > 0 then
+    fetched = commentstring.batch_get(bufnr, locations, preferred_kind or "line")
+  end
+  fetched = fetched or {}
+  local infos = {}
+  for idx = 1, #lines do
+    infos[idx] = false
+  end
+  for idx, info in ipairs(fetched) do
+    local line_idx = mapping[idx]
+    if line_idx then
+      infos[line_idx] = info
+    end
+  end
+  return infos
 end
 
 local function needs_fallback(infos)
@@ -40,10 +58,48 @@ local function fallback_reason(infos)
 end
 
 local function normalize_policy(policy)
-  if policy == "block" or policy == "line" then
+  if policy == "block" or policy == "line" or policy == "first-line" then
     return policy
   end
   return "mixed"
+end
+
+local function first_resolved_info(infos)
+  for _, info in ipairs(infos) do
+    if info and info.resolvable ~= false then
+      return info
+    end
+  end
+end
+
+local function build_uniform_infos(template, count)
+  if not template then
+    return {}
+  end
+  local infos = {}
+  for idx = 1, count do
+    infos[idx] = template
+  end
+  return infos
+end
+
+local function resolve_policy_infos(policy, preferred_kind, fetch_fn, line_count)
+  if policy == "line" then
+    return fetch_fn("line")
+  elseif policy == "block" then
+    return fetch_fn("block")
+  elseif policy == "first-line" then
+    local primary_kind = preferred_kind == "block" and "block" or "line"
+    local secondary_kind = primary_kind == "block" and "line" or "block"
+    local primary = fetch_fn(primary_kind)
+    local secondary = fetch_fn(secondary_kind)
+    local template = first_resolved_info(primary) or first_resolved_info(secondary)
+    if template then
+      return build_uniform_infos(template, line_count)
+    end
+    return primary or secondary or {}
+  end
+  return fetch_fn(preferred_kind)
 end
 
 function Service.toggle(preferred_kind, range, mixed_policy)
@@ -57,7 +113,16 @@ function Service.toggle(preferred_kind, range, mixed_policy)
     return { status = "ok" }
   end
 
-  local infos = fetch_comment_infos(bufnr, start_line, lines, preferred_kind)
+  local policy = normalize_policy(mixed_policy)
+  local cache = {}
+  local function fetch(kind)
+    if not cache[kind] then
+      cache[kind] = fetch_comment_infos(bufnr, start_line, lines, kind)
+    end
+    return cache[kind]
+  end
+  local infos = resolve_policy_infos(policy, preferred_kind, fetch, #lines)
+
   if needs_fallback(infos) then
     return {
       status = "fallback",
@@ -65,7 +130,6 @@ function Service.toggle(preferred_kind, range, mixed_policy)
     }
   end
 
-  local policy = normalize_policy(mixed_policy)
   local result = toggler.toggle_lines(lines, infos, preferred_kind, policy)
   vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, result.lines)
   return { status = "ok", payload = { action = result.action } }

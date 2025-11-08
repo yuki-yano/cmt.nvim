@@ -49,9 +49,7 @@ local function fallback_gc(mode)
 end
 
 local function resolve_mixed_policy(kind)
-  if kind == "block" then
-    return "block"
-  end
+  local fallback = kind == "block" and "block" or "mixed"
   local ft = vim.bo.filetype or ""
   local store = vim.g.cmt_mixed_mode_policy
   local value
@@ -63,10 +61,10 @@ local function resolve_mixed_policy(kind)
   if type(value) == "string" then
     value = string.lower(value)
   end
-  if value == "block" or value == "line" or value == "mixed" then
+  if value == "block" or value == "line" or value == "mixed" or value == "first-line" then
     return value
   end
-  return "mixed"
+  return fallback
 end
 
 local function format_reason(payload)

@@ -8,9 +8,24 @@ local function display_width(value)
   return vim.fn.strdisplaywidth(value)
 end
 
+local function is_blank(line)
+  return line == nil or line:match("%S") == nil
+end
+
 local function strip_indent(line)
   local indent = line:match("^%s*") or ""
   return indent, line:sub(#indent + 1)
+end
+
+local function mode_from_info(info, fallback)
+  if type(info) == "table" then
+    if info.mode == "block" then
+      return "block"
+    elseif info.mode == "line" then
+      return "line"
+    end
+  end
+  return fallback
 end
 
 local function longest_common_indent(indents)
@@ -37,17 +52,20 @@ end
 
 local function is_line_commented(line, info)
   info = info or {}
+  if is_blank(line) then
+    return true
+  end
   local indent, body = strip_indent(line)
   local target = body:gsub("^%s*", "")
-  if target == "" then
-    return false
-  end
   local prefix = (info.prefix or ""):gsub("%s*$", "")
   return prefix ~= "" and target:sub(1, #prefix) == prefix
 end
 
 local function remove_line_comment(line, info)
   info = info or {}
+  if is_blank(line) then
+    return line or ""
+  end
   local indent, body = strip_indent(line)
   local trimmed_prefix = (info.prefix or ""):gsub("%s*$", "")
   local trimmed = body:gsub("^%s*", "")
@@ -68,8 +86,11 @@ local function align_line_comments(lines, infos)
   local indents = {}
   for idx, line in ipairs(lines) do
     local indent, body = strip_indent(line)
-    entries[idx] = { indent = indent, body = body }
-    indents[idx] = indent
+    local blank = is_blank(line)
+    entries[idx] = { indent = indent, body = body, blank = blank, original = line }
+    if not blank then
+      indents[#indents + 1] = indent
+    end
   end
   local shared_indent = longest_common_indent(indents)
   local primary
@@ -82,19 +103,26 @@ local function align_line_comments(lines, infos)
   primary = primary or infos[1] or { prefix = "", suffix = "", mode = "line" }
   local output = {}
   for idx, entry in ipairs(entries) do
-    local info = infos[idx]
-    if not (info and info.mode == "line") then
-      info = primary
+    if entry.blank then
+      output[idx] = entry.original or ""
+    else
+      local info = infos[idx]
+      if not (info and info.mode == "line") then
+        info = primary
+      end
+      local rest = entry.indent:sub(#shared_indent + 1) .. entry.body
+      local pad = rest ~= "" and " " or ""
+      output[idx] = string.format("%s%s%s%s", shared_indent, info.prefix or "", pad, rest)
     end
-    local rest = entry.indent:sub(#shared_indent + 1) .. entry.body
-    local pad = rest ~= "" and " " or ""
-    output[idx] = string.format("%s%s%s%s", shared_indent, info.prefix or "", pad, rest)
   end
   return output
 end
 
 local function is_block_commented(line, info)
   info = info or {}
+  if is_blank(line) then
+    return true
+  end
   local trimmed = vim.trim(line)
   local prefix = info.prefix or ""
   local suffix = info.suffix or ""
@@ -103,6 +131,9 @@ end
 
 local function remove_block_comment(line, info)
   info = info or {}
+  if is_blank(line) then
+    return line or ""
+  end
   local trimmed = vim.trim(line)
   local prefix = info.prefix or ""
   local suffix = info.suffix or ""
@@ -123,8 +154,11 @@ local function add_block_comments(lines, infos)
   local indents = {}
   for idx, line in ipairs(lines) do
     local indent, body = strip_indent(line)
-    stripped[idx] = { indent = indent, body = body }
-    indents[idx] = indent
+    local blank = is_blank(line)
+    stripped[idx] = { indent = indent, body = body, blank = blank, original = line }
+    if not blank then
+      indents[#indents + 1] = indent
+    end
   end
   local shared_indent = longest_common_indent(indents)
   local bodies = {}
@@ -133,22 +167,28 @@ local function add_block_comments(lines, infos)
   end
   local widths = {}
   local max_width = 0
-  for idx, body in ipairs(bodies) do
-    local width = display_width(body)
+  for idx, entry in ipairs(stripped) do
+    local body = bodies[idx]
+    local width = entry.blank and 0 or display_width(body)
     widths[idx] = width
     if width > max_width then
       max_width = width
     end
   end
   local output = {}
-  for idx, body in ipairs(bodies) do
-    local info = infos[idx] or infos[1] or { prefix = "", suffix = "" }
-    local prefix_pad = body ~= "" and " " or ""
-    local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
-    local suffix_pad = string.rep(" ", suffix_pad_length)
-    local content =
-      string.format("%s%s%s%s%s%s", shared_indent, info.prefix or "", prefix_pad, body, suffix_pad, info.suffix or "")
-    output[idx] = content:gsub("%s+$", "")
+  for idx, entry in ipairs(stripped) do
+    if entry.blank then
+      output[idx] = entry.original or ""
+    else
+      local body = bodies[idx]
+      local info = infos[idx] or infos[1] or { prefix = "", suffix = "" }
+      local prefix_pad = body ~= "" and " " or ""
+      local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
+      local suffix_pad = string.rep(" ", suffix_pad_length)
+      local content =
+        string.format("%s%s%s%s%s%s", shared_indent, info.prefix or "", prefix_pad, body, suffix_pad, info.suffix or "")
+      output[idx] = content:gsub("%s+$", "")
+    end
   end
   return output
 end
@@ -272,6 +312,11 @@ function Toggler.toggle_lines(lines, infos, preferred, mixed_policy)
 
   if mixed_policy == "mixed" then
     local result = run_mixed_mode(lines, infos)
+    return { lines = result.lines, action = result.already and "uncomment" or "comment" }
+  elseif mixed_policy == "first-line" then
+    local fallback_mode = preferred == "block" and "block" or "line"
+    local target_mode = mode_from_info(infos[1], fallback_mode)
+    local result = run_uniform_mode(target_mode, lines, infos)
     return { lines = result.lines, action = result.already and "uncomment" or "comment" }
   end
 

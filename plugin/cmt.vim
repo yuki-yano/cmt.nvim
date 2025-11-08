@@ -5,8 +5,8 @@ let g:loaded_cmt_vim = 1
 
 if !exists('g:cmt_mixed_mode_policy')
   let g:cmt_mixed_mode_policy = {
-        \ 'typescriptreact': 'block',
-        \ 'javascriptreact': 'block',
+        \ 'typescriptreact': 'first-line',
+        \ 'javascriptreact': 'first-line',
         \ 'default': 'mixed',
         \ }
 endif

@@ -8,7 +8,7 @@ Tree-sitter aware commenting for Neovim 0.11+. `cmt.nvim` exposes the classic `g
 - **Visual/operator integrations**: Visual selections, text-objects (`<Plug>(cmt:textobj-line-i/a)`), and operator-pending motions are supported; repeated `gc` respects existing comments.
 - **Comment line opening**: `gco` / `gcO` variants insert properly formatted comment leaders (`g:cmt_eol_insert_pad_space` controls extra padding) with Tree-sitter-aware prefixes.
 - **Diagnostics & fallbacks**: `:CmtInfo` reports current commentstrings, fallbacks log clearly, and disabled filetypes transparently delegate to stock `gc`.
-- **Mixed-mode control**: `g:cmt_mixed_mode_policy` lets you decide how mixed line/block regions are handled (`mixed` per-line, or force `block`/`line` uniformly). Default prefers block for React (`typescriptreact`/`javascriptreact`) and mixed elsewhere.
+- **Mixed-mode control**: `g:cmt_mixed_mode_policy` lets you decide how mixed line/block regions are handled (`mixed` per-line, `first-line` to follow the first resolved mode, or force `block`/`line` uniformly). Default prefers `first-line` for React (`typescriptreact`/`javascriptreact`) and mixed elsewhere.
 
 ## Requirements
 
@@ -64,11 +64,14 @@ Global variables exposed by cmt.nvim:
 
 Use `g:cmt_mixed_mode_policy` to control how mixed block/line contexts are resolved when `gc` or `gw` runs.
 
-- Default is `"line"` (line comments win when both modes exist).
 - Accepts either a string or a table:
-  - String: global policy (`"line"` or `"block"`).
+  - String: apply a global policy.
   - Table: per-filetype override. Keys follow Neovim filetype names (e.g. `tsx`, `jsx`, `typescriptreact`). Provide `default` or `*` for fallback.
-- Allowed values: `"line"` or `"block"`.
+- Allowed values:
+  - `"mixed"`: segment selections by Tree-sitter-provided modes (default behavior outside React-like filetypes).
+  - `"first-line"`: inspect only the first selected line (or its fallback) and apply that mode uniformly to the whole range.
+  - `"line"`: force every selection to use line comments.
+  - `"block"`: force every selection to use block comments.
 
 Example (prefer block for TSX/JSX, keep mixed elsewhere):
 
@@ -80,19 +83,29 @@ vim.g.cmt_mixed_mode_policy = {
 }
 ```
 
-> Tip: For React TypeScript files the filetype is often `typescriptreact`, so use that key if needed. By default TSX (`tsx`) / JSX (`jsx`) benefit most from `"block"` to keep `{/* ... */}` paired.
+To follow the first selected line for React-style buffers while keeping everything else mixed, use an object:
+
+```lua
+vim.g.cmt_mixed_mode_policy = {
+  typescriptreact = "first-line",
+  javascriptreact = "first-line",
+  default = "mixed",
+}
+```
+
+(Passing a single string such as `"first-line"` still works when you want the same policy globally.)
 
 By default, cmt.nvim sets:
 
 ```lua
 vim.g.cmt_mixed_mode_policy = {
-  typescriptreact = "block",
-  javascriptreact = "block",
+  typescriptreact = "first-line",
+  javascriptreact = "first-line",
   default = "mixed",
 }
 ```
 
-So TSX/JSX-like buffers prefer block comments while everything else stays mixed. Override this table if needed.
+So TSX/JSX-like buffers prefer following the first line while everything else stays mixed. Override this table if needed (for example force `"block"` globally or only for specific filetypes).
 
 
 | Variable | Default | Description |
@@ -101,7 +114,7 @@ So TSX/JSX-like buffers prefer block comments while everything else stays mixed.
 | `g:cmt_disabled_filetypes` | `{}` | Filetypes that should bypass cmt.nvim (`gc` delegates to Neovim, `gw` emits an error). |
 | `g:cmt_log_level` | `"warn"` | Controls logging verbosity (`error`, `warn`, `info`, `debug`). |
 | `g:cmt_eol_insert_pad_space` | `true` | Adds a space after `gco/gcO` leaders so dot-repeat stays aligned. |
-| `g:cmt_mixed_mode_policy` | `"mixed"` | Dict or string controlling how mixed contexts resolve (`"mixed"`, `"block"`, or `"line"`; accepts `{ tsx = "block", default = "mixed" }`). |
+| `g:cmt_mixed_mode_policy` | `{ typescriptreact = "first-line", javascriptreact = "first-line", default = "mixed" }` | Dict or string controlling how mixed contexts resolve (`"mixed"`, `"first-line"`, `"block"`, or `"line"`; accepts `{ tsx = "block", default = "mixed" }`). |
 
 ## Development
 
