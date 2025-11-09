@@ -44,46 +44,39 @@ local function format_line_fallback(value)
   return prefix
 end
 
-local function fallback_info(ft, preferred_kind)
+local function fallback_infos(ft)
   local fallback = fallback_from_ft(ft)
-  if not fallback then
+  if type(fallback) ~= "table" then
     return nil
   end
-  local function line_info()
-    local line_value = fallback.line and format_line_fallback(fallback.line)
-    if line_value ~= nil then
-      return {
-        prefix = line_value,
-        suffix = "",
-        mode = "line",
-        source = "fallback-line",
+  local infos = {}
+  local line_value = fallback.line and format_line_fallback(fallback.line)
+  if line_value ~= nil then
+    infos.line = {
+      prefix = line_value,
+      suffix = "",
+      mode = "line",
+      source = "fallback-line",
+      resolvable = true,
+    }
+  end
+  if type(fallback.block) == "table" then
+    local block_prefix = fallback.block[1]
+    local block_suffix = fallback.block[2]
+    if block_prefix and block_suffix then
+      infos.block = {
+        prefix = block_prefix,
+        suffix = block_suffix,
+        mode = "block",
+        source = "fallback-block",
         resolvable = true,
       }
     end
   end
-  local function block_info()
-    if type(fallback.block) == "table" then
-      local block_prefix = fallback.block[1]
-      local block_suffix = fallback.block[2]
-      if block_prefix and block_suffix then
-        return {
-          prefix = block_prefix,
-          suffix = block_suffix,
-          mode = "block",
-          source = "fallback-block",
-          resolvable = true,
-        }
-      end
-    end
+  if next(infos) == nil then
+    return nil
   end
-  local order = preferred_kind == "block" and { block_info, line_info } or { line_info, block_info }
-  for _, fn_get in ipairs(order) do
-    local info = fn_get()
-    if info then
-      return info
-    end
-  end
-  return nil
+  return infos
 end
 
 local function unresolved(reason)
@@ -177,39 +170,58 @@ local function try_ts_update(ts, bufnr, location)
   return nil, reason or "ts-context-update-empty"
 end
 
-local function resolve_commentstring(bufnr, location, preferred_kind)
-  local requested_kind = preferred_kind == "block" and "block" or "line"
-  local ft = vim.bo[bufnr].filetype or ""
-  local reason
-
+local function build_resolver_context(bufnr)
+  local ctx = {
+    bufnr = bufnr,
+    ft = vim.bo[bufnr].filetype or "",
+    ts = nil,
+    ts_reason = nil,
+    fallbacks = nil,
+  }
   local ok, ts = pcall(require, "ts_context_commentstring.internal")
   if ok then
-    local info, ts_reason = try_ts_calculate(ts, bufnr, location, requested_kind)
+    ctx.ts = ts
+  else
+    local reason = "ts-context-unavailable"
+    if type(ts) == "string" and ts ~= "" then
+      reason = reason .. ":" .. ts
+    end
+    ctx.ts_reason = reason
+  end
+  ctx.fallbacks = fallback_infos(ctx.ft)
+  return ctx
+end
+
+local function resolve_commentstring(ctx, location, preferred_kind)
+  local requested_kind = preferred_kind == "block" and "block" or "line"
+  local reason
+
+  if ctx.ts then
+    local info, ts_reason = try_ts_calculate(ctx.ts, ctx.bufnr, location, requested_kind)
     reason = reason or ts_reason
     if info then
       return info
     end
-    local updated, update_reason = try_ts_update(ts, bufnr, location)
+    local updated, update_reason = try_ts_update(ctx.ts, ctx.bufnr, location)
     reason = reason or update_reason
     if updated then
       return updated
     end
   else
-    reason = "ts-context-unavailable"
-    if type(ts) == "string" and ts ~= "" then
-      reason = reason .. ":" .. ts
-    end
+    reason = ctx.ts_reason
   end
 
-  local option_info, option_reason = commentstring_from_option(bufnr)
+  local option_info, option_reason = commentstring_from_option(ctx.bufnr)
   if option_info then
     return option_info
   end
   reason = reason or option_reason
 
-  local fallback = fallback_info(ft, requested_kind)
-  if fallback then
-    return fallback
+  if ctx.fallbacks then
+    local info = ctx.fallbacks[requested_kind] or ctx.fallbacks[requested_kind == "block" and "line" or "block"]
+    if info then
+      return vim.deepcopy(info)
+    end
   end
 
   return unresolved(reason)
@@ -217,10 +229,15 @@ end
 
 function M.batch_get(bufnr, locations, preferred_kind)
   local results = {}
+  if type(locations) ~= "table" or vim.tbl_isempty(locations) then
+    return results
+  end
+  local ctx = build_resolver_context(bufnr)
   for _, loc in ipairs(locations) do
     local location = build_location(loc)
-    results[#results + 1] = resolve_commentstring(bufnr, location, preferred_kind)
-    results[#results].line = loc.line
+    local info = resolve_commentstring(ctx, location, preferred_kind)
+    info.line = loc.line
+    results[#results + 1] = info
   end
   return results
 end

@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y neovim luarocks unzip
+      - name: Install Stylua
+        run: |
+          curl -L https://github.com/JohnnyMorganz/StyLua/releases/download/v0.20.0/stylua-linux.zip -o stylua.zip
+          unzip stylua.zip -d stylua-bin
+          sudo mv stylua-bin/stylua /usr/local/bin/stylua
+      - name: Run make ci
+        env:
+          CMT_VUSTED_ROCKS: ${{ github.workspace }}/.luarocks
+        run: make ci

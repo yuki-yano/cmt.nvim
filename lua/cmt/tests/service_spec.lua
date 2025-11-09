@@ -1,4 +1,4 @@
-pcall(require, "plenary.busted")
+local helper = require("vusted.helper")
 
 local original_commentstring = package.loaded["cmt.commentstring"]
 local toggler = require("cmt.toggler")
@@ -95,6 +95,8 @@ describe("cmt.service first-line policy", function()
     else
       package.loaded["cmt.commentstring"] = nil
     end
+    helper.cleanup()
+    helper.cleanup_loaded_modules("cmt")
   end)
 
   it("uses the first resolved block info for every line when policy=first-line", function()
@@ -108,5 +110,101 @@ describe("cmt.service first-line policy", function()
       assert.equals("/*", captured.infos[idx].prefix, "prefix mismatch at idx " .. idx)
       assert.equals("*/", captured.infos[idx].suffix, "suffix mismatch at idx " .. idx)
     end
+  end)
+end)
+
+describe("cmt.service behaviors", function()
+  local Service
+  local bufnr
+  local original_feedkeys
+  local fed_keys
+
+  local function with_comment_infos(template)
+    package.loaded["cmt.commentstring"] = {
+      batch_get = function(_, locations)
+        local result = {}
+        for idx = 1, #locations do
+          local info = vim.deepcopy(template[idx] or template[1])
+          info.line = locations[idx].line
+          result[idx] = info
+        end
+        return result
+      end,
+    }
+    package.loaded["cmt.service"] = nil
+    Service = require("cmt.service")
+  end
+
+  before_each(function()
+    helper.cleanup()
+    helper.cleanup_loaded_modules("cmt")
+    bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "line 1", "line 2" })
+    vim.api.nvim_set_current_buf(bufnr)
+    original_feedkeys = vim.api.nvim_feedkeys
+    vim.api.nvim_feedkeys = function(keys)
+      fed_keys = keys
+    end
+    fed_keys = nil
+  end)
+
+  after_each(function()
+    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
+    vim.api.nvim_feedkeys = original_feedkeys
+    helper.cleanup()
+    helper.cleanup_loaded_modules("cmt")
+    package.loaded["cmt.service"] = nil
+  end)
+
+  it("returns fallback when infos are unresolvable", function()
+    with_comment_infos({
+      {
+        mode = "line",
+        prefix = "",
+        suffix = "",
+        resolvable = false,
+        source = "missing",
+      },
+    })
+    local result = Service.toggle("line", { start_line = 1, end_line = 1 }, "mixed")
+    assert.equals("fallback", result.status)
+    assert.equals("missing", result.payload.reason)
+  end)
+
+  it("open_comment injects padding only when configured", function()
+    with_comment_infos({
+      {
+        mode = "line",
+        prefix = "//",
+        suffix = "",
+        resolvable = true,
+      },
+    })
+    vim.g.cmt_eol_insert_pad_space = false
+    local ok_result = Service.open_comment("below")
+    assert.equals("ok", ok_result.status)
+    assert.equals("o//", fed_keys)
+
+    vim.g.cmt_eol_insert_pad_space = true
+    Service.open_comment("above")
+    assert.equals("O// ", fed_keys)
+  end)
+
+  it("info reports current filetype and resolution", function()
+    with_comment_infos({
+      {
+        mode = "block",
+        prefix = "/*",
+        suffix = "*/",
+        resolvable = true,
+        source = "ts-context",
+      },
+    })
+    vim.bo[bufnr].filetype = "lua"
+    local result = Service.info()
+    assert.equals("ok", result.status)
+    assert.equals("cmt.nvim ft=lua comment=block:/**/ source=ts-context", result.payload.message)
   end)
 end)

@@ -19,7 +19,7 @@ cmt.nvim is a comment toggling plugin for Neovim 0.11+ powered by Tree-sitter. I
 - Neovim 0.11+
 - [nvim-treesitter/nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)
 - [JoosepAlviste/nvim-ts-context-commentstring](https://github.com/JoosepAlviste/nvim-ts-context-commentstring)
-- (Development/tests) [nvim-lua/plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
+- (Development/tests) [notomo/vusted](https://github.com/notomo/vusted) (`luarocks --lua-version=5.1 install vusted`)
 
 ---
 
@@ -29,20 +29,18 @@ cmt.nvim is a comment toggling plugin for Neovim 0.11+ powered by Tree-sitter. I
 return {
   {
     "yuki-yano/cmt.nvim",
-    version = false,
     dependencies = {
       "nvim-treesitter/nvim-treesitter",
       "JoosepAlviste/nvim-ts-context-commentstring",
     },
-    event = { "BufReadPost", "BufNewFile" },
-    config = function()
-      vim.keymap.set({ "n", "x" }, "gc", "<Plug>(cmt:line:toggle)")
-      vim.keymap.set({ "n", "x" }, "gw", "<Plug>(cmt:block:toggle)")
-      vim.keymap.set("n", "gcc", "<Plug>(cmt:line:toggle:current)")
-      vim.keymap.set("n", "gww", "<Plug>(cmt:block:toggle:current)")
-      vim.keymap.set("n", "gco", "<Plug>(cmt:open-below-comment)")
-      vim.keymap.set("n", "gcO", "<Plug>(cmt:open-above-comment)")
-    end,
+    keys = {
+      { "gc",  "<Plug>(cmt:line:toggle)",          mode = { "n", "x" } },
+      { "gw",  "<Plug>(cmt:block:toggle)",         mode = { "n", "x" } },
+      { "gcc", "<Plug>(cmt:line:toggle:current)",  mode = "n" },
+      { "gww", "<Plug>(cmt:block:toggle:current)", mode = "n" },
+      { "gco", "<Plug>(cmt:open-below-comment)",   mode = "n" },
+      { "gcO", "<Plug>(cmt:open-above-comment)",   mode = "n" },
+    },
   },
 }
 ```
@@ -134,12 +132,21 @@ vim.g.cmt_block_fallback = {
 ## Development
 
 ```bash
-# requires plenary.nvim on 'runtimepath'
-nvim --headless -u NONE \
-  -c "set rtp+=tmp/plenary.nvim" \
-  -c "runtime! plugin/plenary.vim" \
-  -c "PlenaryBustedDirectory lua/cmt/tests" \
-  -c qa
+# Install vusted via LuaRocks (make sure the installed bin dir is on your PATH)
+luarocks --lua-version=5.1 install vusted
+
+# Run the whole suite via vusted
+VUSTED_ARGS="--headless --clean -u tests/vusted/init.lua" vusted lua/cmt/tests
+```
+
+If you install vusted into a custom tree (for example `luarocks --lua-version=5.1 --tree .rocks install vusted`), set `CMT_VUSTED_ROCKS=/absolute/path/to/.rocks` before running the tests so Neovim can discover the Lua modules.
+
+Helper targets:
+
+```bash
+make format      # stylua lua tests
+make test        # ensure local vusted tree + run suite
+make ci          # stylua --check + tests
 ```
 
 Layout overview:
@@ -150,4 +157,4 @@ Layout overview:
 4. `lua/cmt/toggler.lua` – pure Lua transformations for line/block alignment.
 5. `lua/cmt/commentstring.lua` – wrappers around `commentstring` sources and fallbacks.
 
-PRs are welcome—keep code stylua-friendly and include tests (Plenary busted) for behaviour changes.
+PRs are welcome—keep code stylua-friendly and include tests (vusted) for behaviour changes.

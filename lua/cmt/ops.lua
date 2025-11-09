@@ -36,13 +36,13 @@ local function is_disabled()
   return seen[ft] == true
 end
 
-local function fallback_gc(mode)
+local function fallback_gc(scope)
   local ok, comment = pcall(require, "vim._comment")
   if not ok or type(comment.operator) ~= "function" then
     return
   end
   local rhs = comment.operator()
-  if mode == "current" then
+  if scope == "current" then
     rhs = rhs .. "_"
   end
   vim.api.nvim_feedkeys(rhs, "n", true)
@@ -78,34 +78,6 @@ local function format_reason(payload)
   return ""
 end
 
-local function dispatch(payload)
-  if is_disabled() then
-    if payload.preferred_kind == "line" then
-      fallback_gc(payload.scope)
-    else
-      log("error", "cmt.nvim: block toggle disabled for this filetype")
-    end
-    return ""
-  end
-
-  local ok, result = pcall(service.toggle, payload.preferred_kind, payload.range, payload.mode_policy)
-  if not ok then
-    log("error", "cmt.nvim: toggle request failed (" .. tostring(result) .. ")")
-    fallback_gc(payload.scope)
-    return ""
-  end
-  if result.status == "ok" then
-    return ""
-  elseif result.status == "fallback" then
-    log("info", "cmt.nvim: delegating to Neovim gc fallback" .. format_reason(result.payload))
-    fallback_gc(result.payload.mode or "line")
-  elseif result.status == "error" then
-    local message = result.payload and result.payload.message or "cmt.nvim: unknown error"
-    log("error", message .. format_reason(result.payload))
-  end
-  return ""
-end
-
 local function visual_range()
   local mode = vim.fn.mode(1)
   local anchor = vim.fn.getpos("v")
@@ -126,8 +98,52 @@ local function leave_visual_if_needed(mode)
   end
 end
 
+local function normalize_kind(kind)
+  if kind == "block" then
+    return "block"
+  end
+  return "line"
+end
+
+local function normalize_range(range)
+  range = range or {}
+  local start_line = math.max(range.start_line or vim.fn.line("."), 1)
+  local end_line = math.max(range.end_line or start_line, start_line)
+  return { start_line = start_line, end_line = end_line }
+end
+
+local function perform(kind, scope, range)
+  kind = normalize_kind(kind)
+  scope = scope or "operator"
+  if is_disabled() then
+    if kind == "line" then
+      fallback_gc(scope)
+    else
+      log("error", "cmt.nvim: block toggle disabled for this filetype")
+    end
+    return
+  end
+  local resolved_range = normalize_range(range)
+  local policy = resolve_mixed_policy(kind)
+  local ok, result = pcall(service.toggle, kind, resolved_range, policy)
+  if not ok then
+    log("error", "cmt.nvim: toggle request failed (" .. tostring(result) .. ")")
+    fallback_gc(scope)
+    return
+  end
+  if result.status == "ok" then
+    return
+  elseif result.status == "fallback" then
+    log("info", "cmt.nvim: delegating to Neovim gc fallback" .. format_reason(result.payload))
+    fallback_gc(scope)
+  elseif result.status == "error" then
+    local message = result.payload and result.payload.message or "cmt.nvim: unknown error"
+    log("error", message .. format_reason(result.payload))
+  end
+end
+
 function Ops.operator(kind)
-  state.pending_kind = kind
+  state.pending_kind = normalize_kind(kind)
   vim.go.operatorfunc = "v:lua.require'cmt.ops'._operator"
   return "g@"
 end
@@ -139,14 +155,9 @@ end
 function Ops._operator(type)
   local start_pos = vim.fn.getpos("'[")
   local end_pos = vim.fn.getpos("']")
-  dispatch({
-    preferred_kind = state.pending_kind or "line",
-    mode_policy = resolve_mixed_policy(state.pending_kind or "line"),
-    scope = type == "line" and "line" or "operator",
-    range = {
-      start_line = start_pos[2],
-      end_line = end_pos[2],
-    },
+  perform(state.pending_kind or "line", type == "line" and "line" or "operator", {
+    start_line = start_pos[2],
+    end_line = end_pos[2],
   })
   state.pending_kind = nil
 end
@@ -154,14 +165,9 @@ end
 function Ops.visual(kind)
   local start_line, end_line, mode = visual_range()
   leave_visual_if_needed(mode)
-  dispatch({
-    preferred_kind = kind,
-    mode_policy = resolve_mixed_policy(kind),
-    scope = "visual",
-    range = {
-      start_line = start_line,
-      end_line = end_line,
-    },
+  perform(kind, "visual", {
+    start_line = start_line,
+    end_line = end_line,
   })
 end
 
@@ -171,14 +177,9 @@ end
 
 function Ops.current(kind)
   local line = vim.fn.line(".")
-  dispatch({
-    preferred_kind = kind,
-    mode_policy = resolve_mixed_policy(kind),
-    scope = "current",
-    range = {
-      start_line = line,
-      end_line = line,
-    },
+  perform(kind, "current", {
+    start_line = line,
+    end_line = line,
   })
 end
 
