@@ -7,19 +7,7 @@ on:
   pull_request:
 
 jobs:
-  stylua:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Stylua Check
-        uses: JohnnyMorganz/stylua-action@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: v0.20.0
-          args: --check lua tests
-
-  tests:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,13 +15,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y neovim luarocks
-      - name: Install vusted
+          sudo apt-get install -y neovim luarocks unzip
+      - name: Install Stylua
         run: |
-          luarocks --lua-version=5.1 --tree .luarocks install vusted
-          echo "${PWD}/.luarocks/bin" >> "$GITHUB_PATH"
-      - name: Run vusted suite
+          curl -L https://github.com/JohnnyMorganz/StyLua/releases/download/v0.20.0/stylua-linux.zip -o stylua.zip
+          unzip stylua.zip -d stylua-bin
+          sudo mv stylua-bin/stylua /usr/local/bin/stylua
+      - name: Run make ci
         env:
           CMT_VUSTED_ROCKS: ${{ github.workspace }}/.luarocks
-          VUSTED_ARGS: --headless --clean -u tests/vusted/init.lua
-        run: vusted lua/cmt/tests
+        run: make ci
