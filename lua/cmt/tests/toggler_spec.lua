@@ -75,8 +75,8 @@ describe("cmt.toggler.toggle_lines", function()
     local commented = toggler.toggle_lines(source, infos, "line")
     assert.are.same({
       '// vi.mock("@/server/utils/id-generator", () => ({',
-      '  // generateReplayId: vi.fn(),',
-      '  // generateUUID: vi.fn(),',
+      "  // generateReplayId: vi.fn(),",
+      "  // generateUUID: vi.fn(),",
       "// ))",
     }, commented.lines)
 

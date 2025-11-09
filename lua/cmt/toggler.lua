@@ -190,17 +190,16 @@ local function add_block_comments(entries, infos, shared_indent)
       local prefix_pad = body ~= "" and " " or ""
       local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
       local suffix_pad = string.rep(" ", suffix_pad_length)
-      local content =
-        string.format(
-          "%s%s%s%s%s%s%s",
-          shared_indent,
-          extra,
-          info.prefix or "",
-          prefix_pad,
-          body,
-          suffix_pad,
-          info.suffix or ""
-        )
+      local content = string.format(
+        "%s%s%s%s%s%s%s",
+        shared_indent,
+        extra,
+        info.prefix or "",
+        prefix_pad,
+        body,
+        suffix_pad,
+        info.suffix or ""
+      )
       output[idx] = content:gsub("%s+$", "")
     end
   end
