@@ -29,20 +29,18 @@ cmt.nvim is a comment toggling plugin for Neovim 0.11+ powered by Tree-sitter. I
 return {
   {
     "yuki-yano/cmt.nvim",
-    version = false,
     dependencies = {
       "nvim-treesitter/nvim-treesitter",
       "JoosepAlviste/nvim-ts-context-commentstring",
     },
-    event = { "BufReadPost", "BufNewFile" },
-    config = function()
-      vim.keymap.set({ "n", "x" }, "gc", "<Plug>(cmt:line:toggle)")
-      vim.keymap.set({ "n", "x" }, "gw", "<Plug>(cmt:block:toggle)")
-      vim.keymap.set("n", "gcc", "<Plug>(cmt:line:toggle:current)")
-      vim.keymap.set("n", "gww", "<Plug>(cmt:block:toggle:current)")
-      vim.keymap.set("n", "gco", "<Plug>(cmt:open-below-comment)")
-      vim.keymap.set("n", "gcO", "<Plug>(cmt:open-above-comment)")
-    end,
+    keys = {
+      { "gc",  "<Plug>(cmt:line:toggle)",          mode = { "n", "x" } },
+      { "gw",  "<Plug>(cmt:block:toggle)",         mode = { "n", "x" } },
+      { "gcc", "<Plug>(cmt:line:toggle:current)",  mode = "n" },
+      { "gww", "<Plug>(cmt:block:toggle:current)", mode = "n" },
+      { "gco", "<Plug>(cmt:open-below-comment)",   mode = "n" },
+      { "gcO", "<Plug>(cmt:open-above-comment)",   mode = "n" },
+    },
   },
 }
 ```
