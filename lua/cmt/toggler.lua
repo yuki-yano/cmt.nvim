@@ -99,6 +99,7 @@ local function preprocess_lines(lines)
   end
   local shared_indent = longest_common_indent(indents)
   for _, entry in ipairs(entries) do
+    entry.anchorable = entry.indent:sub(1, #shared_indent) == shared_indent
     local extra = entry.indent:sub(#shared_indent + 1)
     entry.extra_indent = extra
     if entry.blank then
@@ -131,7 +132,24 @@ local function align_line_comments(entries, infos, shared_indent)
       local extra = entry.extra_indent or ""
       local rest = entry.relative or ""
       local pad = rest ~= "" and " " or ""
-      output[idx] = string.format("%s%s%s%s%s", shared_indent, extra, info.prefix or "", pad, rest)
+      if entry.anchorable then
+        output[idx] = string.format(
+          "%s%s%s%s%s",
+          shared_indent,
+          info.prefix or "",
+          pad,
+          extra,
+          rest
+        )
+      else
+        output[idx] = string.format(
+          "%s%s%s%s",
+          entry.indent,
+          info.prefix or "",
+          pad,
+          rest
+        )
+      end
     end
   end
   return output
@@ -163,9 +181,12 @@ local function remove_block_comment(line, info)
     return line
   end
   local inner = trimmed:sub(#prefix + 1, #trimmed - #suffix)
-  inner = vim.trim(inner)
+  inner = inner:gsub("%s+$", "")
+  inner = inner:gsub("^%s", "", 1)
+  local extra_indent = inner:match("^%s*") or ""
+  inner = inner:sub(#extra_indent + 1)
   local indent = line:match("^%s*") or ""
-  return indent .. inner
+  return indent .. extra_indent .. inner
 end
 
 local function add_block_comments(entries, infos, shared_indent)
@@ -173,7 +194,15 @@ local function add_block_comments(entries, infos, shared_indent)
   local max_width = 0
   for idx, entry in ipairs(entries) do
     local body = entry.relative or ""
-    local width = entry.blank and 0 or display_width(body)
+    local relative_with_extra = (entry.extra_indent or "") .. body
+    local width
+    if entry.blank then
+      width = 0
+    elseif entry.anchorable then
+      width = display_width(relative_with_extra)
+    else
+      width = display_width(body)
+    end
     widths[idx] = width
     if width > max_width then
       max_width = width
@@ -190,16 +219,29 @@ local function add_block_comments(entries, infos, shared_indent)
       local prefix_pad = body ~= "" and " " or ""
       local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
       local suffix_pad = string.rep(" ", suffix_pad_length)
-      local content = string.format(
-        "%s%s%s%s%s%s%s",
-        shared_indent,
-        extra,
-        info.prefix or "",
-        prefix_pad,
-        body,
-        suffix_pad,
-        info.suffix or ""
-      )
+      local content
+      if entry.anchorable then
+        content = string.format(
+          "%s%s%s%s%s%s%s",
+          shared_indent,
+          info.prefix or "",
+          prefix_pad,
+          extra,
+          body,
+          suffix_pad,
+          info.suffix or ""
+        )
+      else
+        content = string.format(
+          "%s%s%s%s%s%s",
+          entry.indent,
+          info.prefix or "",
+          prefix_pad,
+          body,
+          suffix_pad,
+          info.suffix or ""
+        )
+      end
       output[idx] = content:gsub("%s+$", "")
     end
   end

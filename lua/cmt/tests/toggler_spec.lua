@@ -23,7 +23,7 @@ describe("cmt.toggler.toggle_lines", function()
     assert.equals("comment", result.action)
     assert.are.same({
       "// const x = 1;",
-      "  // const y = 2;",
+      "//   const y = 2;",
     }, result.lines)
   end)
 
@@ -75,12 +75,146 @@ describe("cmt.toggler.toggle_lines", function()
     local commented = toggler.toggle_lines(source, infos, "line")
     assert.are.same({
       '// vi.mock("@/server/utils/id-generator", () => ({',
-      "  // generateReplayId: vi.fn(),",
-      "  // generateUUID: vi.fn(),",
+      "//   generateReplayId: vi.fn(),",
+      "//   generateUUID: vi.fn(),",
       "// ))",
     }, commented.lines)
 
     local uncommented = toggler.toggle_lines(commented.lines, infos, "line")
+    assert.are.same(source, uncommented.lines)
+  end)
+
+  it("aligns line comments to the shared indent for nested selections", function()
+    local source = {
+      "  method: \"POST\",",
+      "  headers: {",
+      "    \"Content-Type\": \"application/json\",",
+      "    Authorization: `Bearer ${options.apiKey}`,",
+      "  },",
+    }
+    local infos = {
+      make_info("line", "//"),
+      make_info("line", "//"),
+      make_info("line", "//"),
+      make_info("line", "//"),
+      make_info("line", "//"),
+    }
+
+    local commented = toggler.toggle_lines(source, infos, "line")
+    assert.are.same({
+      "  // method: \"POST\",",
+      "  // headers: {",
+      "  //   \"Content-Type\": \"application/json\",",
+      "  //   Authorization: `Bearer ${options.apiKey}`,",
+      "  // },",
+    }, commented.lines)
+
+    local uncommented = toggler.toggle_lines(commented.lines, infos, "line")
+    assert.are.same(source, uncommented.lines)
+  end)
+
+  it("aligns block comments to the shared indent for nested selections", function()
+    local source = {
+      "  method: \"POST\",",
+      "  headers: {",
+      "    \"Content-Type\": \"application/json\",",
+      "    Authorization: `Bearer ${options.apiKey}`,",
+      "  },",
+    }
+    local infos = {
+      make_info("block", "/*", "*/"),
+      make_info("block", "/*", "*/"),
+      make_info("block", "/*", "*/"),
+      make_info("block", "/*", "*/"),
+      make_info("block", "/*", "*/"),
+    }
+
+    local commented = toggler.toggle_lines(source, infos, "block")
+    assert.are.same({
+      '  /* method: "POST",                              */',
+      "  /* headers: {                                   */",
+      '  /*   "Content-Type": "application/json",        */',
+      "  /*   Authorization: `Bearer ${options.apiKey}`, */",
+      "  /* },                                           */",
+    }, commented.lines)
+
+    local uncommented = toggler.toggle_lines(commented.lines, infos, "block")
+    assert.are.same(source, uncommented.lines)
+  end)
+
+  it("aligns line comments even when the selection starts at column 0", function()
+    local source = {
+      "const ensureReplayHistory = (get: Getter, set: Setter, replayData: ReplayData): Array<HistoryEntry> => {",
+      "  const currentHistory = get(gameHistoryAtom)",
+      "  if (currentHistory.length === replayData.operations.length + 1) {",
+      "    return currentHistory",
+      "  }",
+      "",
+      "  const initialState = produce(replayData.startSnapshot, () => {})",
+      "  const fullHistory = buildReplayHistory(initialState, replayData.operations)",
+      "  set(gameHistoryAtom, fullHistory)",
+      "  return fullHistory",
+      "}",
+    }
+    local infos = {}
+    for idx = 1, #source do
+      infos[idx] = make_info("line", "//")
+    end
+
+    local commented = toggler.toggle_lines(source, infos, "line")
+    assert.are.same({
+      "// const ensureReplayHistory = (get: Getter, set: Setter, replayData: ReplayData): Array<HistoryEntry> => {",
+      "//   const currentHistory = get(gameHistoryAtom)",
+      "//   if (currentHistory.length === replayData.operations.length + 1) {",
+      "//     return currentHistory",
+      "//   }",
+      "",
+      "//   const initialState = produce(replayData.startSnapshot, () => {})",
+      "//   const fullHistory = buildReplayHistory(initialState, replayData.operations)",
+      "//   set(gameHistoryAtom, fullHistory)",
+      "//   return fullHistory",
+      "// }",
+    }, commented.lines)
+
+    local uncommented = toggler.toggle_lines(commented.lines, infos, "line")
+    assert.are.same(source, uncommented.lines)
+  end)
+
+  it("aligns block comments even when the selection starts at column 0", function()
+    local source = {
+      "const ensureReplayHistory = (get: Getter, set: Setter, replayData: ReplayData): Array<HistoryEntry> => {",
+      "  const currentHistory = get(gameHistoryAtom)",
+      "  if (currentHistory.length === replayData.operations.length + 1) {",
+      "    return currentHistory",
+      "  }",
+      "",
+      "  const initialState = produce(replayData.startSnapshot, () => {})",
+      "  const fullHistory = buildReplayHistory(initialState, replayData.operations)",
+      "  set(gameHistoryAtom, fullHistory)",
+      "  return fullHistory",
+      "}",
+    }
+    local infos = {}
+    for idx = 1, #source do
+      infos[idx] = make_info("block", "/*", "*/")
+    end
+
+    local commented = toggler.toggle_lines(source, infos, "block")
+    assert.are.same({
+      "/* const ensureReplayHistory = (get: Getter, set: Setter, replayData: ReplayData): Array<HistoryEntry> => { */",
+      "/*   const currentHistory = get(gameHistoryAtom)                                                            */",
+      "/*   if (currentHistory.length === replayData.operations.length + 1) {                                      */",
+      "/*     return currentHistory                                                                                */",
+      "/*   }                                                                                                      */",
+      "",
+      "/*   const initialState = produce(replayData.startSnapshot, () => {})                                       */",
+      "/*   const fullHistory = buildReplayHistory(initialState, replayData.operations)                            */",
+      "/*   set(gameHistoryAtom, fullHistory)                                                                      */",
+      "/*   return fullHistory                                                                                     */",
+      "/* }                                                                                                        */",
+    }, commented.lines)
+
+    local uncommented = toggler.toggle_lines(commented.lines, infos, "block")
     assert.are.same(source, uncommented.lines)
   end)
 
@@ -98,9 +232,9 @@ describe("cmt.toggler.toggle_lines", function()
 
     local result = toggler.toggle_lines(lines, infos, "line")
     assert.are.same({
-      "{/* <div>             */}",
-      "  {/* <span>text</span> */}",
-      "{/* </div>            */}",
+      "{/* <div>               */}",
+      "{/*   <span>text</span> */}",
+      "{/* </div>              */}",
     }, result.lines)
   end)
 
@@ -122,14 +256,14 @@ describe("cmt.toggler.toggle_lines", function()
 
     local block_policy = toggler.toggle_lines(lines, infos, "line", "block")
     assert.are.same({
-      "{/* <div>     */}",
-      "  {/* className */}",
+      "{/* <div>       */}",
+      "{/*   className */}",
     }, block_policy.lines)
 
     local line_policy = toggler.toggle_lines(lines, infos, "line", "line")
     assert.are.same({
       "// <div>",
-      "  // className",
+      "//   className",
     }, line_policy.lines)
   end)
 
