@@ -143,6 +143,14 @@ VUSTED_ARGS="--headless --clean -u tests/vusted/init.lua" vusted lua/cmt/tests
 
 If you install vusted into a custom tree (for example `luarocks --lua-version=5.1 --tree .rocks install vusted`), set `CMT_VUSTED_ROCKS=/absolute/path/to/.rocks` before running the tests so Neovim can discover the Lua modules.
 
+Helper targets:
+
+```bash
+make format      # stylua lua tests
+make test        # ensure local vusted tree + run suite
+make ci          # stylua --check + tests
+```
+
 Layout overview:
 
 1. `plugin/cmt.vim` – declares `<Plug>` mappings, operatorfunc hooks, defaults.
