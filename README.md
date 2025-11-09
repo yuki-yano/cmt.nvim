@@ -10,6 +10,7 @@ cmt.nvim is a comment toggling plugin for Neovim 0.11+ powered by Tree-sitter. I
 - **Operator-ready mappings** – `<Plug>` targets exist for operator-pending, visual, and linewise motions, so you can build any keymap on top of cmt.nvim without losing dot-repeat.
 - **Smart line opening** – `gco` / `gcO` inject Tree-sitter-aware leaders (with optional padding) and respect mixed comment modes.
 - **Mixed-mode control** – `g:cmt_mixed_mode_policy` lets you choose between `mixed`, `first-line`, `line`, or `block` behaviour per filetype. React-style filetypes default to `first-line`, all others to `mixed`.
+- **Transient flash** – whichever lines were just toggled briefly highlight so you can confirm the affected span even when the cursor stays put.
 - **Diagnostics & fallbacks** – `:CmtInfo` shows the active commentstring and source; when Tree-sitter data is missing, cmt.nvim logs and transparently defers to Neovim’s built-in operators.
 
 ---
@@ -102,6 +103,7 @@ All mappings are defined as `<Plug>` targets under `plugin/cmt.vim`, so feel fre
 | `g:cmt_disabled_filetypes` | `{}` | Filetypes that should bypass cmt.nvim entirely. |
 | `g:cmt_eol_insert_pad_space` | `true` | Adds a trailing space when inserting `gco` / `gcO`. |
 | `g:cmt_log_level` | `"warn"` | Logging threshold (`"error"`, `"warn"`, `"info"`, `"debug"`). |
+| `g:cmt_toggle_highlight` | `{ enabled = true, duration = 200, groups = { comment = "CmtToggleCommented", uncomment = "CmtToggleUncommented" } }` | Controls the transient highlight applied to the most recent toggle. |
 
 Example configuration focusing on React/Next.js buffers:
 
@@ -116,9 +118,32 @@ vim.g.cmt_mixed_mode_policy = {
 vim.g.cmt_block_fallback = {
   astro = { line = "-- %s", block = { "<!--", "-->" } },
 }
+
+vim.g.cmt_toggle_highlight = {
+  enabled = true,
+  duration = 200, -- milliseconds
+  groups = {
+    comment = "IncSearch",
+    uncomment = "DiffDelete",
+  },
+}
 ```
 
 ---
+
+### Toggle highlight flash
+
+- `enabled` – turn the flash on/off globally (default: `true`).
+- `duration` – how long (ms) to keep the highlight before it automatically clears (default: `200`).
+- `groups.comment` / `groups.uncomment` – highlight groups used after adding or removing comments. Defaults link to `DiffAdd` / `DiffDelete`, so you can simply re-link `CmtToggleCommented` or `CmtToggleUncommented` in your colorscheme if you prefer.
+
+For example:
+
+```lua
+vim.api.nvim_set_hl(0, "CmtToggleCommented", { bg = "#1d3b2f" })
+vim.api.nvim_set_hl(0, "CmtToggleUncommented", { bg = "#3b1d1d" })
+vim.g.cmt_toggle_highlight = { duration = 250 }
+```
 
 ## Troubleshooting
 

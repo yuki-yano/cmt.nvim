@@ -173,6 +173,15 @@ describe("cmt.service behaviors", function()
     assert.equals("missing", result.payload.reason)
   end)
 
+  it("returns range metadata when toggle succeeds", function()
+    with_comment_infos(line_infos)
+    local result = Service.toggle("line", { start_line = 1, end_line = 2 }, "mixed")
+    assert.equals("ok", result.status)
+    assert.equals(1, result.payload.start_line)
+    assert.equals(2, result.payload.end_line)
+    assert.equals("comment", result.payload.action)
+  end)
+
   it("open_comment injects padding only when configured", function()
     with_comment_infos({
       {

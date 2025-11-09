@@ -4,6 +4,8 @@ describe("cmt.ops", function()
   local Ops
   local calls
   local stub_service
+  local highlight_calls
+  local stub_highlight
   local original_feedkeys
   local fed_keys
 
@@ -12,11 +14,18 @@ describe("cmt.ops", function()
     helper.cleanup_loaded_modules("cmt")
     package.loaded["cmt.ops"] = nil
     package.loaded["cmt.service"] = stub_service
+    package.loaded["cmt.highlight"] = stub_highlight
     Ops = require("cmt.ops")
   end
 
   before_each(function()
     calls = {}
+    highlight_calls = {}
+    stub_highlight = {
+      flash = function(range, action)
+        table.insert(highlight_calls, { range = range, action = action })
+      end,
+    }
     stub_service = {
       toggle = function(kind, range, policy)
         table.insert(calls, { kind = kind, range = range, policy = policy })
@@ -76,5 +85,23 @@ describe("cmt.ops", function()
     assert.equals("block", calls[1].kind)
     assert.equals(1, calls[1].range.start_line)
     assert.equals(2, calls[1].range.end_line)
+  end)
+
+  it("flashes the toggled range after a successful operation", function()
+    stub_service.toggle = function(kind, range, policy)
+      table.insert(calls, { kind = kind, range = range, policy = policy })
+      return {
+        status = "ok",
+        payload = {
+          action = "comment",
+        },
+      }
+    end
+    reload_ops()
+    Ops.current("line")
+    assert.equals(1, #highlight_calls)
+    assert.equals("comment", highlight_calls[1].action)
+    assert.equals(1, highlight_calls[1].range.start_line)
+    assert.equals(1, highlight_calls[1].range.end_line)
   end)
 end)

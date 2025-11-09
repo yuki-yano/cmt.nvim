@@ -1,4 +1,5 @@
 local service = require("cmt.service")
+local highlight = require("cmt.highlight")
 
 local Ops = {}
 
@@ -132,6 +133,10 @@ local function perform(kind, scope, range)
     return
   end
   if result.status == "ok" then
+    highlight.flash({
+      start_line = resolved_range.start_line,
+      end_line = resolved_range.end_line,
+    }, result.payload and result.payload.action, vim.api.nvim_get_current_buf())
     return
   elseif result.status == "fallback" then
     log("info", "cmt.nvim: delegating to Neovim gc fallback" .. format_reason(result.payload))

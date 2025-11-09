@@ -138,7 +138,15 @@ function Service.toggle(preferred_kind, range, mixed_policy)
 
   local result = toggler.toggle_lines(lines, infos, preferred_kind, policy)
   vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, result.lines)
-  return { status = "ok", payload = { action = result.action } }
+  return {
+    status = "ok",
+    payload = {
+      action = result.action,
+      start_line = start_line,
+      end_line = end_line,
+      bufnr = bufnr,
+    },
+  }
 end
 
 function Service.open_comment(direction)
