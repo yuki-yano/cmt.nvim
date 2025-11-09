@@ -218,8 +218,7 @@ local function resolve_commentstring(ctx, location, preferred_kind)
   reason = reason or option_reason
 
   if ctx.fallbacks then
-    local info = ctx.fallbacks[requested_kind]
-      or ctx.fallbacks[requested_kind == "block" and "line" or "block"]
+    local info = ctx.fallbacks[requested_kind] or ctx.fallbacks[requested_kind == "block" and "line" or "block"]
     if info then
       return vim.deepcopy(info)
     end
