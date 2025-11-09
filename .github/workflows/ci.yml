@@ -16,6 +16,7 @@ jobs:
         uses: JohnnyMorganz/stylua-action@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          version: v0.20.0
           args: --check lua tests
 
   tests:
@@ -28,9 +29,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y neovim luarocks
       - name: Install vusted
-        run: luarocks --lua-version=5.1 install vusted
+        run: |
+          luarocks --lua-version=5.1 --tree .luarocks install vusted
+          echo "${PWD}/.luarocks/bin" >> "$GITHUB_PATH"
       - name: Run vusted suite
         env:
-          PATH: /home/runner/.luarocks/bin:${{ env.PATH }}
+          CMT_VUSTED_ROCKS: ${{ github.workspace }}/.luarocks
           VUSTED_ARGS: --headless --clean -u tests/vusted/init.lua
         run: vusted lua/cmt/tests
