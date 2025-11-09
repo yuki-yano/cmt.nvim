@@ -102,6 +102,12 @@ local function resolve_policy_infos(policy, preferred_kind, fetch_fn, line_count
   return fetch_fn(preferred_kind)
 end
 
+local function single_line_info(bufnr, line, preferred_kind)
+  local text = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1] or ""
+  local infos = fetch_comment_infos(bufnr, line, { text }, preferred_kind or "line")
+  return infos[1]
+end
+
 function Service.toggle(preferred_kind, range, mixed_policy)
   preferred_kind = preferred_kind == "block" and "block" or "line"
   range = range or {}
@@ -138,9 +144,7 @@ end
 function Service.open_comment(direction)
   local bufnr = vim.api.nvim_get_current_buf()
   local line = vim.fn.line(".")
-  local text = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1] or ""
-  local infos = fetch_comment_infos(bufnr, line, { text }, "line")
-  local info = infos[1]
+  local info = single_line_info(bufnr, line, "line")
   if not info or info.resolvable == false then
     return {
       status = "fallback",
@@ -159,9 +163,7 @@ function Service.info()
   local bufnr = vim.api.nvim_get_current_buf()
   local ft = vim.bo[bufnr].filetype or ""
   local line = vim.fn.line(".")
-  local text = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1] or ""
-  local infos = fetch_comment_infos(bufnr, line, { text }, "line")
-  local info = infos[1]
+  local info = single_line_info(bufnr, line, "line")
   local source = (info and info.source) or "none"
   local current
   if info and info.resolvable ~= false then

@@ -81,18 +81,34 @@ local function remove_line_comment(line, info)
   return indent .. rest
 end
 
-local function align_line_comments(lines, infos)
+local function preprocess_lines(lines)
   local entries = {}
   local indents = {}
   for idx, line in ipairs(lines) do
     local indent, body = strip_indent(line)
     local blank = is_blank(line)
-    entries[idx] = { indent = indent, body = body, blank = blank, original = line }
+    entries[idx] = {
+      indent = indent,
+      body = body,
+      blank = blank,
+      original = line or "",
+    }
     if not blank then
       indents[#indents + 1] = indent
     end
   end
   local shared_indent = longest_common_indent(indents)
+  for _, entry in ipairs(entries) do
+    if entry.blank then
+      entry.relative = ""
+    else
+      entry.relative = entry.indent:sub(#shared_indent + 1) .. entry.body
+    end
+  end
+  return entries, shared_indent
+end
+
+local function align_line_comments(entries, infos, shared_indent)
   local primary
   for _, info in ipairs(infos) do
     if info and info.mode == "line" then
@@ -104,13 +120,13 @@ local function align_line_comments(lines, infos)
   local output = {}
   for idx, entry in ipairs(entries) do
     if entry.blank then
-      output[idx] = entry.original or ""
+      output[idx] = entry.original
     else
       local info = infos[idx]
       if not (info and info.mode == "line") then
         info = primary
       end
-      local rest = entry.indent:sub(#shared_indent + 1) .. entry.body
+      local rest = entry.relative or ""
       local pad = rest ~= "" and " " or ""
       output[idx] = string.format("%s%s%s%s", shared_indent, info.prefix or "", pad, rest)
     end
@@ -149,26 +165,11 @@ local function remove_block_comment(line, info)
   return indent .. inner
 end
 
-local function add_block_comments(lines, infos)
-  local stripped = {}
-  local indents = {}
-  for idx, line in ipairs(lines) do
-    local indent, body = strip_indent(line)
-    local blank = is_blank(line)
-    stripped[idx] = { indent = indent, body = body, blank = blank, original = line }
-    if not blank then
-      indents[#indents + 1] = indent
-    end
-  end
-  local shared_indent = longest_common_indent(indents)
-  local bodies = {}
-  for idx, entry in ipairs(stripped) do
-    bodies[idx] = entry.indent:sub(#shared_indent + 1) .. entry.body
-  end
+local function add_block_comments(entries, infos, shared_indent)
   local widths = {}
   local max_width = 0
-  for idx, entry in ipairs(stripped) do
-    local body = bodies[idx]
+  for idx, entry in ipairs(entries) do
+    local body = entry.relative or ""
     local width = entry.blank and 0 or display_width(body)
     widths[idx] = width
     if width > max_width then
@@ -176,11 +177,11 @@ local function add_block_comments(lines, infos)
     end
   end
   local output = {}
-  for idx, entry in ipairs(stripped) do
+  for idx, entry in ipairs(entries) do
     if entry.blank then
-      output[idx] = entry.original or ""
+      output[idx] = entry.original
     else
-      local body = bodies[idx]
+      local body = entry.relative or ""
       local info = infos[idx] or infos[1] or { prefix = "", suffix = "" }
       local prefix_pad = body ~= "" and " " or ""
       local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
@@ -221,7 +222,8 @@ local function run_line_mode(lines, infos)
       updated[idx] = remove_line_comment(line, infos[idx] or default_info)
     end
   else
-    updated = align_line_comments(lines, infos)
+    local entries, shared_indent = preprocess_lines(lines)
+    updated = align_line_comments(entries, infos, shared_indent)
   end
   return { lines = updated, already = already }
 end
@@ -258,7 +260,8 @@ local function run_block_mode(lines, infos)
       updated[idx] = remove_block_comment(line, block_infos[idx])
     end
   else
-    updated = add_block_comments(lines, block_infos)
+    local entries, shared_indent = preprocess_lines(lines)
+    updated = add_block_comments(entries, block_infos, shared_indent)
   end
   return { lines = updated, already = already }
 end
@@ -284,7 +287,8 @@ local function run_mixed_mode(lines, infos)
   end
   segments[#segments + 1] = { start = start_idx, finish = #modes, mode = current }
 
-  local output = vim.deepcopy(lines)
+  local output = {}
+  vim.list_extend(output, lines)
   local all_already = true
   for _, segment in ipairs(segments) do
     local slice_lines = {}
