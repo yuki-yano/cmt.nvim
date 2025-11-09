@@ -7,14 +7,13 @@ local function append_rtp(path)
 end
 
 append_rtp(root)
-append_rtp(root .. "/tmp/plenary.nvim")
 
--- Support local luarocks installations such as `luarocks --tree tmp/.luarocks install vusted`.
-local luarocks_tree = root .. "/tmp/.luarocks"
-local share_lua = luarocks_tree .. "/share/lua/5.1/?.lua"
-local share_init = luarocks_tree .. "/share/lua/5.1/?/init.lua"
-local lib_lua = luarocks_tree .. "/lib/lua/5.1/?.so"
-if vim.fn.isdirectory(luarocks_tree) == 1 then
+-- Support custom LuaRocks trees via CMT_VUSTED_ROCKS (useful with `luarocks --tree`).
+local luarocks_tree = vim.env.CMT_VUSTED_ROCKS
+if luarocks_tree and luarocks_tree ~= "" and vim.fn.isdirectory(luarocks_tree) == 1 then
+  local share_lua = luarocks_tree .. "/share/lua/5.1/?.lua"
+  local share_init = luarocks_tree .. "/share/lua/5.1/?/init.lua"
+  local lib_lua = luarocks_tree .. "/lib/lua/5.1/?.so"
   package.path = table.concat({ share_lua, share_init, package.path }, ";")
   package.cpath = table.concat({ lib_lua, package.cpath }, ";")
 end

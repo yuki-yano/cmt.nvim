@@ -19,7 +19,6 @@ cmt.nvim is a comment toggling plugin for Neovim 0.11+ powered by Tree-sitter. I
 - Neovim 0.11+
 - [nvim-treesitter/nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)
 - [JoosepAlviste/nvim-ts-context-commentstring](https://github.com/JoosepAlviste/nvim-ts-context-commentstring)
-- (Development/tests) [nvim-lua/plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
 - (Development/tests) [notomo/vusted](https://github.com/notomo/vusted) (`luarocks --lua-version=5.1 install vusted`)
 
 ---
@@ -135,17 +134,14 @@ vim.g.cmt_block_fallback = {
 ## Development
 
 ```bash
-# Optional helper for Plenary utilities
-git clone https://github.com/nvim-lua/plenary.nvim tmp/plenary.nvim
-
-# Install vusted + busted into a local tree to avoid polluting your system Lua
-luarocks --lua-version=5.1 --tree tmp/.luarocks install vusted
+# Install vusted via LuaRocks (make sure the installed bin dir is on your PATH)
+luarocks --lua-version=5.1 install vusted
 
 # Run the whole suite via vusted
-PATH="$(pwd)/tmp/.luarocks/bin:$PATH" \
-  VUSTED_ARGS="--headless --clean -u tests/vusted/init.lua" \
-  vusted lua/cmt/tests
+VUSTED_ARGS="--headless --clean -u tests/vusted/init.lua" vusted lua/cmt/tests
 ```
+
+If you install vusted into a custom tree (for example `luarocks --lua-version=5.1 --tree .rocks install vusted`), set `CMT_VUSTED_ROCKS=/absolute/path/to/.rocks` before running the tests so Neovim can discover the Lua modules.
 
 Layout overview:
 
