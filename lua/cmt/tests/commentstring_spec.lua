@@ -84,4 +84,51 @@ describe("cmt.commentstring", function()
     assert.equals("line", infos[1].mode)
     assert.is_truthy(infos[1].source)
   end)
+
+  it("uses ts.update_commentstring fallback when calculate fails", function()
+    local updated = false
+    package.loaded["ts_context_commentstring.internal"] = {
+      calculate_commentstring = function()
+        return nil
+      end,
+      update_commentstring = function()
+        updated = true
+        vim.api.nvim_buf_set_option(bufnr, "commentstring", "/* %s */")
+      end,
+    }
+    vim.api.nvim_buf_set_option(bufnr, "commentstring", "")
+
+    local infos = commentstring.batch_get(bufnr, {
+      { line = 3, column = 0 },
+    }, "block")
+
+    assert.is_true(updated)
+    assert.equals("block", infos[1].mode)
+    assert.equals("/*", infos[1].prefix)
+    assert.equals("*/", infos[1].suffix)
+  end)
+
+  it("returns fresh fallback tables per request", function()
+    vim.api.nvim_buf_set_option(bufnr, "commentstring", "")
+    vim.bo[bufnr].filetype = "astro"
+    vim.g.cmt_block_fallback = {
+      astro = {
+        line = "-- %s",
+        block = { "<!--", "-->" },
+      },
+    }
+
+    local first = commentstring.batch_get(bufnr, {
+      { line = 1, column = 0 },
+      { line = 2, column = 0 },
+    }, "line")
+    first[1].prefix = "mutated"
+
+    local second = commentstring.batch_get(bufnr, {
+      { line = 3, column = 0 },
+    }, "line")
+
+    assert.equals("-- ", second[1].prefix)
+    assert.not_equals(first[1], second[1])
+  end)
 end)

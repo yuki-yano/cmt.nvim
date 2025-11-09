@@ -132,4 +132,38 @@ describe("cmt.toggler.toggle_lines", function()
       "//   className",
     }, line_policy.lines)
   end)
+
+  it("preserves blank lines when toggling", function()
+    local lines = {
+      "",
+      "value",
+    }
+    local infos = {
+      make_info("line", "//"),
+      make_info("line", "//"),
+    }
+    local commented = toggler.toggle_lines(lines, infos, "line")
+    assert.are.same({
+      "",
+      "// value",
+    }, commented.lines)
+    local uncommented = toggler.toggle_lines(commented.lines, infos, "line")
+    assert.are.same(lines, uncommented.lines)
+  end)
+
+  it("uses preferred mode when first-line policy lacks info", function()
+    local lines = {
+      "foo()",
+      "bar()",
+    }
+    local infos = {
+      false,
+      make_info("block", "/*", "*/"),
+    }
+    local result = toggler.toggle_lines(lines, infos, "block", "first-line")
+    assert.are.same({
+      "/* foo() */",
+      "/* bar() */",
+    }, result.lines)
+  end)
 end)
