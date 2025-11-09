@@ -1,5 +1,3 @@
-pcall(require, "plenary.busted")
-
 local toggler = require("cmt.toggler")
 
 local function make_info(mode, prefix, suffix)

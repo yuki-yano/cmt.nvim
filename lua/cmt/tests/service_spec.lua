@@ -1,4 +1,4 @@
-pcall(require, "plenary.busted")
+local helper = require("vusted.helper")
 
 local original_commentstring = package.loaded["cmt.commentstring"]
 local toggler = require("cmt.toggler")
@@ -95,6 +95,8 @@ describe("cmt.service first-line policy", function()
     else
       package.loaded["cmt.commentstring"] = nil
     end
+    helper.cleanup()
+    helper.cleanup_loaded_modules("cmt")
   end)
 
   it("uses the first resolved block info for every line when policy=first-line", function()

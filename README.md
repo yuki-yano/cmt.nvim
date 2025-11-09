@@ -20,6 +20,7 @@ cmt.nvim is a comment toggling plugin for Neovim 0.11+ powered by Tree-sitter. I
 - [nvim-treesitter/nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)
 - [JoosepAlviste/nvim-ts-context-commentstring](https://github.com/JoosepAlviste/nvim-ts-context-commentstring)
 - (Development/tests) [nvim-lua/plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
+- (Development/tests) [notomo/vusted](https://github.com/notomo/vusted) (`luarocks --lua-version=5.1 install vusted`)
 
 ---
 
@@ -134,12 +135,16 @@ vim.g.cmt_block_fallback = {
 ## Development
 
 ```bash
-# requires plenary.nvim on 'runtimepath'
-nvim --headless -u NONE \
-  -c "set rtp+=tmp/plenary.nvim" \
-  -c "runtime! plugin/plenary.vim" \
-  -c "PlenaryBustedDirectory lua/cmt/tests" \
-  -c qa
+# Optional helper for Plenary utilities
+git clone https://github.com/nvim-lua/plenary.nvim tmp/plenary.nvim
+
+# Install vusted + busted into a local tree to avoid polluting your system Lua
+luarocks --lua-version=5.1 --tree tmp/.luarocks install vusted
+
+# Run the whole suite via vusted
+PATH="$(pwd)/tmp/.luarocks/bin:$PATH" \
+  VUSTED_ARGS="--headless --clean -u tests/vusted/init.lua" \
+  vusted lua/cmt/tests
 ```
 
 Layout overview:
@@ -150,4 +155,4 @@ Layout overview:
 4. `lua/cmt/toggler.lua` – pure Lua transformations for line/block alignment.
 5. `lua/cmt/commentstring.lua` – wrappers around `commentstring` sources and fallbacks.
 
-PRs are welcome—keep code stylua-friendly and include tests (Plenary busted) for behaviour changes.
+PRs are welcome—keep code stylua-friendly and include tests (vusted) for behaviour changes.
