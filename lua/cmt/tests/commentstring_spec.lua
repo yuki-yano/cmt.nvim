@@ -15,7 +15,7 @@ describe("cmt.commentstring", function()
     commentstring = require("cmt.commentstring")
     bufnr = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_set_current_buf(bufnr)
-    vim.api.nvim_buf_set_option(bufnr, "commentstring", "// %s")
+    vim.bo[bufnr].commentstring = "// %s"
     vim.bo[bufnr].filetype = "typescript"
   end)
 
@@ -53,7 +53,7 @@ describe("cmt.commentstring", function()
   end)
 
   it("falls back to filetype configuration when buffer data is missing", function()
-    vim.api.nvim_buf_set_option(bufnr, "commentstring", "")
+    vim.bo[bufnr].commentstring = ""
     vim.bo[bufnr].filetype = "astro"
     vim.g.cmt_block_fallback = {
       astro = {
@@ -73,7 +73,7 @@ describe("cmt.commentstring", function()
   end)
 
   it("marks entries as unresolved when nothing can be resolved", function()
-    vim.api.nvim_buf_set_option(bufnr, "commentstring", "")
+    vim.bo[bufnr].commentstring = ""
 
     local infos = commentstring.batch_get(bufnr, {
       { line = 5, column = 0 },
@@ -93,10 +93,10 @@ describe("cmt.commentstring", function()
       end,
       update_commentstring = function()
         updated = true
-        vim.api.nvim_buf_set_option(bufnr, "commentstring", "/* %s */")
+        vim.bo[bufnr].commentstring = "/* %s */"
       end,
     }
-    vim.api.nvim_buf_set_option(bufnr, "commentstring", "")
+    vim.bo[bufnr].commentstring = ""
 
     local infos = commentstring.batch_get(bufnr, {
       { line = 3, column = 0 },
@@ -109,7 +109,7 @@ describe("cmt.commentstring", function()
   end)
 
   it("returns fresh fallback tables per request", function()
-    vim.api.nvim_buf_set_option(bufnr, "commentstring", "")
+    vim.bo[bufnr].commentstring = ""
     vim.bo[bufnr].filetype = "astro"
     vim.g.cmt_block_fallback = {
       astro = {

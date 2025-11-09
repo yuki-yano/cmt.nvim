@@ -23,7 +23,7 @@ describe("cmt.toggler.toggle_lines", function()
     assert.equals("comment", result.action)
     assert.are.same({
       "// const x = 1;",
-      "//   const y = 2;",
+      "  // const y = 2;",
     }, result.lines)
   end)
 
@@ -75,8 +75,8 @@ describe("cmt.toggler.toggle_lines", function()
     local commented = toggler.toggle_lines(source, infos, "line")
     assert.are.same({
       '// vi.mock("@/server/utils/id-generator", () => ({',
-      "//   generateReplayId: vi.fn(),",
-      "//   generateUUID: vi.fn(),",
+      '  // generateReplayId: vi.fn(),',
+      '  // generateUUID: vi.fn(),',
       "// ))",
     }, commented.lines)
 
@@ -98,9 +98,9 @@ describe("cmt.toggler.toggle_lines", function()
 
     local result = toggler.toggle_lines(lines, infos, "line")
     assert.are.same({
-      "{/* <div>               */}",
-      "{/*   <span>text</span> */}",
-      "{/* </div>              */}",
+      "{/* <div>             */}",
+      "  {/* <span>text</span> */}",
+      "{/* </div>            */}",
     }, result.lines)
   end)
 
@@ -122,14 +122,14 @@ describe("cmt.toggler.toggle_lines", function()
 
     local block_policy = toggler.toggle_lines(lines, infos, "line", "block")
     assert.are.same({
-      "{/* <div>       */}",
-      "{/*   className */}",
+      "{/* <div>     */}",
+      "  {/* className */}",
     }, block_policy.lines)
 
     local line_policy = toggler.toggle_lines(lines, infos, "line", "line")
     assert.are.same({
       "// <div>",
-      "//   className",
+      "  // className",
     }, line_policy.lines)
   end)
 

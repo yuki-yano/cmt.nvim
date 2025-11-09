@@ -99,10 +99,12 @@ local function preprocess_lines(lines)
   end
   local shared_indent = longest_common_indent(indents)
   for _, entry in ipairs(entries) do
+    local extra = entry.indent:sub(#shared_indent + 1)
+    entry.extra_indent = extra
     if entry.blank then
       entry.relative = ""
     else
-      entry.relative = entry.indent:sub(#shared_indent + 1) .. entry.body
+      entry.relative = entry.body
     end
   end
   return entries, shared_indent
@@ -126,9 +128,10 @@ local function align_line_comments(entries, infos, shared_indent)
       if not (info and info.mode == "line") then
         info = primary
       end
+      local extra = entry.extra_indent or ""
       local rest = entry.relative or ""
       local pad = rest ~= "" and " " or ""
-      output[idx] = string.format("%s%s%s%s", shared_indent, info.prefix or "", pad, rest)
+      output[idx] = string.format("%s%s%s%s%s", shared_indent, extra, info.prefix or "", pad, rest)
     end
   end
   return output
@@ -181,13 +184,23 @@ local function add_block_comments(entries, infos, shared_indent)
     if entry.blank then
       output[idx] = entry.original
     else
+      local extra = entry.extra_indent or ""
       local body = entry.relative or ""
-      local info = infos[idx] or infos[1] or { prefix = "", suffix = "" }
+      local info = infos[idx]
       local prefix_pad = body ~= "" and " " or ""
       local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
       local suffix_pad = string.rep(" ", suffix_pad_length)
       local content =
-        string.format("%s%s%s%s%s%s", shared_indent, info.prefix or "", prefix_pad, body, suffix_pad, info.suffix or "")
+        string.format(
+          "%s%s%s%s%s%s%s",
+          shared_indent,
+          extra,
+          info.prefix or "",
+          prefix_pad,
+          body,
+          suffix_pad,
+          info.suffix or ""
+        )
       output[idx] = content:gsub("%s+$", "")
     end
   end
