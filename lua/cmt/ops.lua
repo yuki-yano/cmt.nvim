@@ -30,11 +30,7 @@ local function is_disabled()
   if type(disabled) ~= "table" then
     return false
   end
-  local seen = {}
-  for _, name in ipairs(disabled) do
-    seen[name] = true
-  end
-  return seen[ft] == true
+  return vim.tbl_contains(disabled, ft)
 end
 
 local function fallback_gc(scope)
@@ -153,10 +149,6 @@ function Ops.operator(kind)
   return "g@"
 end
 
-function Ops.operator_expr(kind)
-  return Ops.operator(kind)
-end
-
 function Ops._operator(type)
   local start_pos = vim.fn.getpos("'[")
   local end_pos = vim.fn.getpos("']")
@@ -176,10 +168,6 @@ function Ops.visual(kind)
   })
 end
 
-function Ops.visual_entry(kind)
-  Ops.visual(kind)
-end
-
 function Ops.current(kind)
   local line = vim.fn.line(".")
   perform(kind, "current", {
@@ -187,10 +175,9 @@ function Ops.current(kind)
     end_line = line,
   })
 end
-
-function Ops.current_entry(kind)
-  Ops.current(kind)
-end
+Ops.operator_expr = Ops.operator
+Ops.visual_entry = Ops.visual
+Ops.current_entry = Ops.current
 
 function Ops.open(direction)
   if is_disabled() then

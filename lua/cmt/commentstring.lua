@@ -36,29 +36,27 @@ local function fallback_from_ft(ft)
   return store[ft]
 end
 
-local function format_line_fallback(value)
-  if type(value) ~= "string" then
-    return nil
-  end
-  local prefix = value:match("^(.*)%%s$") or value:gsub("%%s", "")
-  return prefix
-end
-
 local function fallback_infos(ft)
   local fallback = fallback_from_ft(ft)
   if type(fallback) ~= "table" then
     return nil
   end
   local infos = {}
-  local line_value = fallback.line and format_line_fallback(fallback.line)
-  if line_value ~= nil then
-    infos.line = {
-      prefix = line_value,
-      suffix = "",
-      mode = "line",
-      source = "fallback-line",
-      resolvable = true,
-    }
+  local function format_line_prefix(value)
+    if type(value) ~= "string" then
+      return nil
+    end
+    return value:match("^(.*)%%s$") or value:gsub("%%s", "")
+  end
+  local line_info = fallback.line and info_from_commentstring(fallback.line, "fallback-line")
+  if line_info then
+    local raw_prefix = format_line_prefix(fallback.line)
+    if raw_prefix then
+      line_info.prefix = raw_prefix
+      line_info.mode = "line"
+      line_info.suffix = ""
+    end
+    infos.line = line_info
   end
   if type(fallback.block) == "table" then
     local block_prefix = fallback.block[1]
@@ -110,51 +108,34 @@ local function build_location(loc)
   return { row, col }
 end
 
-local function try_ts_calculate(ts, bufnr, location, preferred_kind)
-  if type(ts.calculate_commentstring) ~= "function" then
-    return nil, "ts-context-missing-calculate"
-  end
-  local last_reason
-  local function attempt(key)
-    local ok, value = pcall(ts.calculate_commentstring, {
-      key = key,
-      location = location,
-      buf = bufnr,
-    })
-    if ok and type(value) == "string" and value ~= "" then
-      local info = info_from_commentstring(value, "ts-context:" .. key)
-      if info then
-        return info
+local function resolve_via_ts(ts, bufnr, location, preferred_kind)
+  local reason
+  if type(ts.calculate_commentstring) == "function" then
+    local order = (preferred_kind == "block") and { "__multiline", "__default" } or { "__default", "__multiline" }
+    for _, key in ipairs(order) do
+      local ok, value = pcall(ts.calculate_commentstring, {
+        key = key,
+        location = location,
+        buf = bufnr,
+      })
+      if ok and type(value) == "string" and value ~= "" then
+        local info = info_from_commentstring(value, "ts-context:" .. key)
+        if info then
+          return info
+        end
+        reason = "ts-context-invalid-commentstring"
+      else
+        reason = ok and ("ts-context-empty:" .. key) or ("ts-context-error:" .. tostring(value))
       end
-      last_reason = "ts-context-invalid-commentstring"
-      return nil
     end
-    if not ok then
-      last_reason = "ts-context-error:" .. tostring(value)
-      return nil
-    end
-    last_reason = "ts-context-empty:" .. key
-    return nil
-  end
-  local order
-  if preferred_kind == "block" then
-    order = { "__multiline", "__default" }
   else
-    order = { "__default", "__multiline" }
+    reason = "ts-context-missing-calculate"
   end
-  for _, key in ipairs(order) do
-    local info = attempt(key)
-    if info then
-      return info
-    end
-  end
-  return nil, last_reason or "ts-context-empty"
-end
 
-local function try_ts_update(ts, bufnr, location)
   if type(ts.update_commentstring) ~= "function" then
-    return nil, "ts-context-missing-update"
+    return nil, reason or "ts-context-missing-update"
   end
+
   local ok, err = pcall(function()
     vim.api.nvim_buf_call(bufnr, function()
       ts.update_commentstring({ location = location })
@@ -163,11 +144,12 @@ local function try_ts_update(ts, bufnr, location)
   if not ok then
     return nil, "ts-context-update-error:" .. tostring(err)
   end
-  local info, reason = commentstring_from_option(bufnr, "ts-context:update")
+
+  local info, option_reason = commentstring_from_option(bufnr, "ts-context:update")
   if info then
     return info
   end
-  return nil, reason or "ts-context-update-empty"
+  return nil, option_reason or reason or "ts-context-update-empty"
 end
 
 local function build_resolver_context(bufnr)
@@ -197,15 +179,10 @@ local function resolve_commentstring(ctx, location, preferred_kind)
   local reason
 
   if ctx.ts then
-    local info, ts_reason = try_ts_calculate(ctx.ts, ctx.bufnr, location, requested_kind)
+    local info, ts_reason = resolve_via_ts(ctx.ts, ctx.bufnr, location, requested_kind)
     reason = reason or ts_reason
     if info then
       return info
-    end
-    local updated, update_reason = try_ts_update(ctx.ts, ctx.bufnr, location)
-    reason = reason or update_reason
-    if updated then
-      return updated
     end
   else
     reason = ctx.ts_reason
@@ -237,9 +214,21 @@ function M.batch_get(bufnr, locations, preferred_kind)
     local location = build_location(loc)
     local info = resolve_commentstring(ctx, location, preferred_kind)
     info.line = loc.line
+    info.line_index = loc.line_index
     results[#results + 1] = info
   end
   return results
+end
+
+function M.resolve_at(bufnr, location, preferred_kind)
+  if type(location) ~= "table" then
+    return nil
+  end
+  local ctx = build_resolver_context(bufnr)
+  local resolved = resolve_commentstring(ctx, build_location(location), preferred_kind)
+  resolved.line = location.line
+  resolved.line_index = location.line_index
+  return resolved
 end
 
 return M

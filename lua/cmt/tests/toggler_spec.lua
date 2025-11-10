@@ -86,9 +86,9 @@ describe("cmt.toggler.toggle_lines", function()
 
   it("aligns line comments to the shared indent for nested selections", function()
     local source = {
-      "  method: \"POST\",",
+      '  method: "POST",',
       "  headers: {",
-      "    \"Content-Type\": \"application/json\",",
+      '    "Content-Type": "application/json",',
       "    Authorization: `Bearer ${options.apiKey}`,",
       "  },",
     }
@@ -102,9 +102,9 @@ describe("cmt.toggler.toggle_lines", function()
 
     local commented = toggler.toggle_lines(source, infos, "line")
     assert.are.same({
-      "  // method: \"POST\",",
+      '  // method: "POST",',
       "  // headers: {",
-      "  //   \"Content-Type\": \"application/json\",",
+      '  //   "Content-Type": "application/json",',
       "  //   Authorization: `Bearer ${options.apiKey}`,",
       "  // },",
     }, commented.lines)
@@ -115,9 +115,9 @@ describe("cmt.toggler.toggle_lines", function()
 
   it("aligns block comments to the shared indent for nested selections", function()
     local source = {
-      "  method: \"POST\",",
+      '  method: "POST",',
       "  headers: {",
-      "    \"Content-Type\": \"application/json\",",
+      '    "Content-Type": "application/json",',
       "    Authorization: `Bearer ${options.apiKey}`,",
       "  },",
     }

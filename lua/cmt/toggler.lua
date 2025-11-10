@@ -111,6 +111,28 @@ local function preprocess_lines(lines)
   return entries, shared_indent
 end
 
+local function render_entry(entry, shared_indent, opts)
+  opts = opts or {}
+  local indent = entry.anchorable and shared_indent or entry.indent
+  local extra = entry.extra_indent or ""
+  local parts = {
+    indent,
+    opts.prefix or "",
+    opts.pad or "",
+  }
+  if entry.anchorable and opts.include_extra ~= false then
+    parts[#parts + 1] = extra
+  end
+  parts[#parts + 1] = opts.body or ""
+  parts[#parts + 1] = opts.tail or ""
+  parts[#parts + 1] = opts.suffix or ""
+  local text = table.concat(parts)
+  if opts.trim then
+    text = text:gsub("%s+$", "")
+  end
+  return text
+end
+
 local function align_line_comments(entries, infos, shared_indent)
   local primary
   for _, info in ipairs(infos) do
@@ -129,27 +151,13 @@ local function align_line_comments(entries, infos, shared_indent)
       if not (info and info.mode == "line") then
         info = primary
       end
-      local extra = entry.extra_indent or ""
       local rest = entry.relative or ""
       local pad = rest ~= "" and " " or ""
-      if entry.anchorable then
-        output[idx] = string.format(
-          "%s%s%s%s%s",
-          shared_indent,
-          info.prefix or "",
-          pad,
-          extra,
-          rest
-        )
-      else
-        output[idx] = string.format(
-          "%s%s%s%s",
-          entry.indent,
-          info.prefix or "",
-          pad,
-          rest
-        )
-      end
+      output[idx] = render_entry(entry, shared_indent, {
+        prefix = info.prefix or "",
+        pad = pad,
+        body = rest,
+      })
     end
   end
   return output
@@ -213,36 +221,19 @@ local function add_block_comments(entries, infos, shared_indent)
     if entry.blank then
       output[idx] = entry.original
     else
-      local extra = entry.extra_indent or ""
       local body = entry.relative or ""
       local info = infos[idx]
       local prefix_pad = body ~= "" and " " or ""
       local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
       local suffix_pad = string.rep(" ", suffix_pad_length)
-      local content
-      if entry.anchorable then
-        content = string.format(
-          "%s%s%s%s%s%s%s",
-          shared_indent,
-          info.prefix or "",
-          prefix_pad,
-          extra,
-          body,
-          suffix_pad,
-          info.suffix or ""
-        )
-      else
-        content = string.format(
-          "%s%s%s%s%s%s",
-          entry.indent,
-          info.prefix or "",
-          prefix_pad,
-          body,
-          suffix_pad,
-          info.suffix or ""
-        )
-      end
-      output[idx] = content:gsub("%s+$", "")
+      output[idx] = render_entry(entry, shared_indent, {
+        prefix = info.prefix or "",
+        pad = prefix_pad,
+        body = body,
+        tail = suffix_pad,
+        suffix = info.suffix or "",
+        trim = true,
+      })
     end
   end
   return output

@@ -2,13 +2,22 @@ local Highlight = {}
 
 local ns = vim.api.nvim_create_namespace("cmt.toggle.highlight")
 
-local active_timer
+local active_timers = {}
 
-local function stop_timer()
-  if active_timer then
-    active_timer:stop()
-    active_timer:close()
-    active_timer = nil
+local function stop_timer(bufnr)
+  if bufnr then
+    local timer = active_timers[bufnr]
+    if timer then
+      timer:stop()
+      timer:close()
+      active_timers[bufnr] = nil
+    end
+    return
+  end
+  for target, timer in pairs(active_timers) do
+    timer:stop()
+    timer:close()
+    active_timers[target] = nil
   end
 end
 
@@ -48,8 +57,9 @@ local function apply_highlight(bufnr, group, start_line, end_line)
 end
 
 function Highlight.clear(bufnr)
-  stop_timer()
-  clear_namespace(bufnr or vim.api.nvim_get_current_buf())
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  stop_timer(bufnr)
+  clear_namespace(bufnr)
 end
 
 function Highlight.flash(range, action, bufnr)
@@ -72,15 +82,15 @@ function Highlight.flash(range, action, bufnr)
   local start_idx = start_line - 1
   local end_idx = end_line - 1
   apply_highlight(bufnr, group, start_idx, end_idx)
-  stop_timer()
+  stop_timer(bufnr)
   local handle = vim.loop.new_timer()
-  active_timer = handle
+  active_timers[bufnr] = handle
   local duration = math.max(config.duration or 200, 10)
   handle:start(duration, 0, function()
     handle:stop()
     handle:close()
-    if active_timer == handle then
-      active_timer = nil
+    if active_timers[bufnr] == handle then
+      active_timers[bufnr] = nil
     end
     vim.schedule(function()
       clear_namespace(bufnr)

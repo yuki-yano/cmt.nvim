@@ -5,23 +5,23 @@ local Service = {}
 
 local function enumerate_locations(start_line, lines)
   local locations = {}
-  local mapping = {}
   for idx, text in ipairs(lines) do
     local first = text:find("%S")
     if first then
-      local column = first - 1
       locations[#locations + 1] = {
         line = start_line + idx - 1,
-        column = column,
+        column = first - 1,
+        line_index = idx,
       }
-      mapping[#locations] = idx
     end
   end
-  return locations, mapping
+  return locations
 end
 
-local function fetch_comment_infos(bufnr, start_line, lines, preferred_kind)
-  local locations, mapping = enumerate_locations(start_line, lines)
+local function fetch_comment_infos(bufnr, lines, preferred_kind, locations)
+  if not locations then
+    return {}
+  end
   local fetched
   if #locations > 0 then
     fetched = commentstring.batch_get(bufnr, locations, preferred_kind or "line")
@@ -32,29 +32,28 @@ local function fetch_comment_infos(bufnr, start_line, lines, preferred_kind)
     infos[idx] = false
   end
   for idx, info in ipairs(fetched) do
-    local line_idx = mapping[idx]
-    if line_idx then
+    local line_idx = info and info.line_index
+    if not line_idx then
+      local location = locations[idx]
+      line_idx = location and location.line_index
+      if info and line_idx then
+        info.line_index = line_idx
+      end
+    end
+    if line_idx and infos[line_idx] ~= nil then
       infos[line_idx] = info
     end
   end
   return infos
 end
 
-local function needs_fallback(infos)
+local function fallback_status(infos)
   for _, info in ipairs(infos) do
     if info and info.resolvable == false then
-      return true
+      return true, info.source
     end
   end
   return false
-end
-
-local function fallback_reason(infos)
-  for _, info in ipairs(infos) do
-    if info and info.resolvable == false then
-      return info.source
-    end
-  end
 end
 
 local function normalize_policy(policy)
@@ -104,7 +103,25 @@ end
 
 local function single_line_info(bufnr, line, preferred_kind)
   local text = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1] or ""
-  local infos = fetch_comment_infos(bufnr, line, { text }, preferred_kind or "line")
+  local first = text:find("%S")
+  if not first then
+    return nil
+  end
+  if type(commentstring.resolve_at) == "function" then
+    return commentstring.resolve_at(bufnr, {
+      line = line,
+      column = first - 1,
+      line_index = 1,
+    }, preferred_kind or "line")
+  end
+  local locations = {
+    {
+      line = line,
+      column = first - 1,
+      line_index = 1,
+    },
+  }
+  local infos = fetch_comment_infos(bufnr, { text }, preferred_kind or "line", locations)
   return infos[1]
 end
 
@@ -120,19 +137,21 @@ function Service.toggle(preferred_kind, range, mixed_policy)
   end
 
   local policy = normalize_policy(mixed_policy)
+  local locations = enumerate_locations(start_line, lines)
   local cache = {}
   local function fetch(kind)
     if not cache[kind] then
-      cache[kind] = fetch_comment_infos(bufnr, start_line, lines, kind)
+      cache[kind] = fetch_comment_infos(bufnr, lines, kind, locations)
     end
     return cache[kind]
   end
   local infos = resolve_policy_infos(policy, preferred_kind, fetch, #lines)
 
-  if needs_fallback(infos) then
+  local needs_fallback, reason = fallback_status(infos)
+  if needs_fallback then
     return {
       status = "fallback",
-      payload = { mode = "line", reason = fallback_reason(infos) },
+      payload = { mode = "line", reason = reason },
     }
   end
 
