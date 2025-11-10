@@ -125,6 +125,12 @@ local function single_line_info(bufnr, line, preferred_kind)
   return infos[1]
 end
 
+local function current_line_info(preferred_kind)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local line = vim.fn.line(".")
+  return bufnr, line, single_line_info(bufnr, line, preferred_kind or "line")
+end
+
 function Service.toggle(preferred_kind, range, mixed_policy)
   preferred_kind = preferred_kind == "block" and "block" or "line"
   range = range or {}
@@ -169,9 +175,7 @@ function Service.toggle(preferred_kind, range, mixed_policy)
 end
 
 function Service.open_comment(direction)
-  local bufnr = vim.api.nvim_get_current_buf()
-  local line = vim.fn.line(".")
-  local info = single_line_info(bufnr, line, "line")
+  local bufnr, _, info = current_line_info("line")
   if not info or info.resolvable == false then
     return {
       status = "fallback",
@@ -187,10 +191,8 @@ function Service.open_comment(direction)
 end
 
 function Service.info()
-  local bufnr = vim.api.nvim_get_current_buf()
+  local bufnr, _, info = current_line_info("line")
   local ft = vim.bo[bufnr].filetype or ""
-  local line = vim.fn.line(".")
-  local info = single_line_info(bufnr, line, "line")
   local source = (info and info.source) or "none"
   local current
   if info and info.resolvable ~= false then

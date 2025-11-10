@@ -41,27 +41,25 @@ local function fallback_infos(ft)
   if type(fallback) ~= "table" then
     return nil
   end
-  local infos = {}
-  local function format_line_prefix(value)
-    if type(value) ~= "string" then
-      return nil
+  local infos
+  if type(fallback.line) == "string" then
+    local prefix = fallback.line:match("^(.*)%%s$") or fallback.line:gsub("%%s", "")
+    if prefix and prefix ~= "" then
+      infos = infos or {}
+      infos.line = {
+        prefix = prefix,
+        suffix = "",
+        mode = "line",
+        source = "fallback-line",
+        resolvable = true,
+      }
     end
-    return value:match("^(.*)%%s$") or value:gsub("%%s", "")
-  end
-  local line_info = fallback.line and info_from_commentstring(fallback.line, "fallback-line")
-  if line_info then
-    local raw_prefix = format_line_prefix(fallback.line)
-    if raw_prefix then
-      line_info.prefix = raw_prefix
-      line_info.mode = "line"
-      line_info.suffix = ""
-    end
-    infos.line = line_info
   end
   if type(fallback.block) == "table" then
     local block_prefix = fallback.block[1]
     local block_suffix = fallback.block[2]
     if block_prefix and block_suffix then
+      infos = infos or {}
       infos.block = {
         prefix = block_prefix,
         suffix = block_suffix,
@@ -70,9 +68,6 @@ local function fallback_infos(ft)
         resolvable = true,
       }
     end
-  end
-  if next(infos) == nil then
-    return nil
   end
   return infos
 end
@@ -109,7 +104,7 @@ local function build_location(loc)
 end
 
 local function resolve_via_ts(ts, bufnr, location, preferred_kind)
-  local reason
+  local last_reason
   if type(ts.calculate_commentstring) == "function" then
     local order = (preferred_kind == "block") and { "__multiline", "__default" } or { "__default", "__multiline" }
     for _, key in ipairs(order) do
@@ -123,17 +118,17 @@ local function resolve_via_ts(ts, bufnr, location, preferred_kind)
         if info then
           return info
         end
-        reason = "ts-context-invalid-commentstring"
+        last_reason = "ts-context-invalid-commentstring"
       else
-        reason = ok and ("ts-context-empty:" .. key) or ("ts-context-error:" .. tostring(value))
+        last_reason = ok and ("ts-context-empty:" .. key) or ("ts-context-error:" .. tostring(value))
       end
     end
   else
-    reason = "ts-context-missing-calculate"
+    last_reason = "ts-context-missing-calculate"
   end
 
   if type(ts.update_commentstring) ~= "function" then
-    return nil, reason or "ts-context-missing-update"
+    return nil, last_reason or "ts-context-missing-update"
   end
 
   local ok, err = pcall(function()
@@ -149,7 +144,7 @@ local function resolve_via_ts(ts, bufnr, location, preferred_kind)
   if info then
     return info
   end
-  return nil, option_reason or reason or "ts-context-update-empty"
+  return nil, option_reason or last_reason or "ts-context-update-empty"
 end
 
 local function build_resolver_context(bufnr)

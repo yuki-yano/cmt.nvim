@@ -115,15 +115,21 @@ local function render_entry(entry, shared_indent, opts)
   opts = opts or {}
   local indent = entry.anchorable and shared_indent or entry.indent
   local extra = entry.extra_indent or ""
+  local prefix = opts.prefix or ""
+  local body = opts.body or ""
+  local pad = opts.pad
+  if pad == nil and opts.auto_pad ~= false and prefix ~= "" and body ~= "" then
+    pad = " "
+  end
   local parts = {
     indent,
-    opts.prefix or "",
-    opts.pad or "",
+    prefix,
+    pad or "",
   }
   if entry.anchorable and opts.include_extra ~= false then
     parts[#parts + 1] = extra
   end
-  parts[#parts + 1] = opts.body or ""
+  parts[#parts + 1] = body
   parts[#parts + 1] = opts.tail or ""
   parts[#parts + 1] = opts.suffix or ""
   local text = table.concat(parts)
@@ -152,10 +158,8 @@ local function align_line_comments(entries, infos, shared_indent)
         info = primary
       end
       local rest = entry.relative or ""
-      local pad = rest ~= "" and " " or ""
       output[idx] = render_entry(entry, shared_indent, {
         prefix = info.prefix or "",
-        pad = pad,
         body = rest,
       })
     end
@@ -223,12 +227,10 @@ local function add_block_comments(entries, infos, shared_indent)
     else
       local body = entry.relative or ""
       local info = infos[idx]
-      local prefix_pad = body ~= "" and " " or ""
       local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
       local suffix_pad = string.rep(" ", suffix_pad_length)
       output[idx] = render_entry(entry, shared_indent, {
         prefix = info.prefix or "",
-        pad = prefix_pad,
         body = body,
         tail = suffix_pad,
         suffix = info.suffix or "",
