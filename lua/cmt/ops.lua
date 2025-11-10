@@ -39,6 +39,9 @@ local function fallback_gc(scope)
     return
   end
   local rhs = comment.operator()
+  if type(rhs) ~= "string" or rhs == "" then
+    return
+  end
   if scope == "current" then
     rhs = rhs .. "_"
   end

@@ -55,7 +55,7 @@ local function is_line_commented(line, info)
   if is_blank(line) then
     return true
   end
-  local indent, body = strip_indent(line)
+  local _, body = strip_indent(line)
   local target = body:gsub("^%s*", "")
   local prefix = (info.prefix or ""):gsub("%s*$", "")
   return prefix ~= "" and target:sub(1, #prefix) == prefix
