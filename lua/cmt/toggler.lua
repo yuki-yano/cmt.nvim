@@ -225,7 +225,17 @@ local function add_block_comments(entries, infos, shared_indent, opts)
     end
   end
 
+  local fallback_info
+  for _, info in ipairs(infos) do
+    if type(info) == "table" then
+      fallback_info = info
+      break
+    end
+  end
+  fallback_info = fallback_info or { prefix = "", suffix = "", mode = "block" }
+
   local function render_block_line(entry, info, body, suffix_pad, force_pad)
+    info = type(info) == "table" and info or fallback_info
     return render_entry(entry, shared_indent, {
       prefix = info.prefix or "",
       pad = force_pad and " " or nil,
@@ -239,10 +249,14 @@ local function add_block_comments(entries, infos, shared_indent, opts)
   local output = {}
   for idx, entry in ipairs(entries) do
     local info = infos[idx]
+    if type(info) ~= "table" then
+      info = fallback_info
+    end
+    local has_block_tokens = (info.prefix or "") ~= "" and (info.suffix or "") ~= ""
     local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
     local suffix_pad = string.rep(" ", suffix_pad_length)
     if entry.blank then
-      if not include_blank then
+      if not include_blank or not has_block_tokens then
         output[idx] = entry.original
       else
         output[idx] = render_block_line(entry, info, "", suffix_pad, true)
@@ -254,7 +268,6 @@ local function add_block_comments(entries, infos, shared_indent, opts)
   end
   return output
 end
-
 
 local function segment_modes(infos)
   local modes = {}

@@ -290,7 +290,6 @@ describe("cmt.toggler.toggle_lines", function()
     assert.are.same(lines, uncommented.lines)
   end)
 
-
   it("includes blank lines when requested for line comments", function()
     local source = {
       "export const add = (a: number, b: number) => {",
@@ -343,6 +342,18 @@ describe("cmt.toggler.toggle_lines", function()
       include_blank_lines = true,
     })
     assert.are.same(source, uncommented.lines)
+  end)
+
+  it("guards block blank rendering when infos are missing", function()
+    local lines = {
+      "",
+      "",
+    }
+    local result = toggler.toggle_lines(lines, {}, "block", "block", {
+      include_blank_lines = true,
+    })
+    assert.are.same(lines, result.lines)
+    assert.equals("comment", result.action)
   end)
 
   it("uses preferred mode when first-line policy lacks info", function()
