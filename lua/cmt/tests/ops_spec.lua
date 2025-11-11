@@ -27,8 +27,8 @@ describe("cmt.ops", function()
       end,
     }
     stub_service = {
-      toggle = function(kind, range, policy)
-        table.insert(calls, { kind = kind, range = range, policy = policy })
+      toggle = function(kind, range, policy, options)
+        table.insert(calls, { kind = kind, range = range, policy = policy, options = options })
         return { status = "ok" }
       end,
     }
@@ -87,9 +87,16 @@ describe("cmt.ops", function()
     assert.equals(2, calls[1].range.end_line)
   end)
 
+  it("forwards toggle options from mappings", function()
+    Ops.current({ kind = "line", include_blank_lines = true })
+    assert.equals(1, #calls)
+    assert.is_truthy(calls[1].options)
+    assert.is_true(calls[1].options.include_blank_lines)
+  end)
+
   it("flashes the toggled range after a successful operation", function()
-    stub_service.toggle = function(kind, range, policy)
-      table.insert(calls, { kind = kind, range = range, policy = policy })
+    stub_service.toggle = function(kind, range, policy, options)
+      table.insert(calls, { kind = kind, range = range, policy = policy, options = options })
       return {
         status = "ok",
         payload = {

@@ -35,12 +35,16 @@ return {
       "JoosepAlviste/nvim-ts-context-commentstring",
     },
     keys = {
-      { "gc",  "<Plug>(cmt:line:toggle)",          mode = { "n", "x" } },
-      { "gw",  "<Plug>(cmt:block:toggle)",         mode = { "n", "x" } },
-      { "gcc", "<Plug>(cmt:line:toggle:current)",  mode = "n" },
-      { "gww", "<Plug>(cmt:block:toggle:current)", mode = "n" },
-      { "gco", "<Plug>(cmt:open-below-comment)",   mode = "n" },
-      { "gcO", "<Plug>(cmt:open-above-comment)",   mode = "n" },
+      { 'gc', '<Plug>(cmt:line:toggle)', mode = { 'n', 'x' } },
+      { 'gw', '<Plug>(cmt:block:toggle)', mode = { 'n', 'x' } },
+      { 'gC', '<Plug>(cmt:line:toggle:with-blank)', mode = { 'n', 'x' } },
+      { 'gW', '<Plug>(cmt:block:toggle:with-blank)', mode = { 'n', 'x' } },
+      { 'gcc', '<Plug>(cmt:line:toggle:current)', mode = 'n' },
+      { 'gCC', '<Plug>(cmt:line:toggle:with-blank:current)', mode = 'n' },
+      { 'gww', '<Plug>(cmt:block:toggle:current)', mode = 'n' },
+      { 'gWW', '<Plug>(cmt:block:toggle:with-blank:current)', mode = 'n' },
+      { 'gco', '<Plug>(cmt:open-below-comment)', mode = 'n' },
+      { 'gcO', '<Plug>(cmt:open-above-comment)', mode = 'n' },
     },
   },
 }
@@ -56,13 +60,14 @@ vim.g.cmt_disabled_filetypes = { "csv" }
 
 ## Usage at a Glance
 
-| Action | Mapping (example) | Description |
-| --- | --- | --- |
-| Toggle line comments | `gc` / `gcc` | Operator/linewise toggles using Tree-sitter aware prefixes. |
-| Toggle block comments | `gw` / `gww` | Chooses block prefixes/suffixes per line or falls back to Neovim when unresolved. |
-| Visual toggles | `gc` in visual mode | Works on rectangular or characterwise selections. |
-| Open comment lines | `gco`, `gcO` | Inserts a comment leader (optionally padded) above/below the cursor. |
-| Diagnostics | `:CmtInfo` | Shows the resolved commentstring, source, and fallbacks. |
+| Action                | Mapping (example)   | Description                                                                                |
+| --------------------- | ------------------- | ------------------------------------------------------------------------------------------ |
+| Toggle line comments  | `gc` / `gcc`        | Operator/linewise toggles using Tree-sitter aware prefixes.                                |
+| Toggle block comments | `gw` / `gww`        | Chooses block prefixes/suffixes per line or falls back to Neovim when unresolved.          |
+| Include blank lines   | `gC` / `gW`         | Uses dedicated `<Plug>` targets that comment blank lines (`//` or `/* */`) alongside code. |
+| Visual toggles        | `gc` in visual mode | Works on rectangular or characterwise selections.                                          |
+| Open comment lines    | `gco`, `gcO`        | Inserts a comment leader (optionally padded) above/below the cursor.                       |
+| Diagnostics           | `:CmtInfo`          | Shows the resolved commentstring, source, and fallbacks.                                   |
 
 All mappings are defined as `<Plug>` targets under `plugin/cmt.vim`, so feel free to remap to different keys.
 
@@ -71,23 +76,34 @@ All mappings are defined as `<Plug>` targets under `plugin/cmt.vim`, so feel fre
 ## Feature Details
 
 ### Tree-sitter aware toggles
+
 - Each selected line is sent to `nvim-ts-context-commentstring` to resolve the correct commentstring.
 - When Tree-sitter cannot answer, cmt.nvim optionally retries via `ts.update_commentstring` or falls back to the buffer’s `commentstring`.
 - If nothing can be resolved, the request gracefully delegates to Neovim’s built-in `gc`.
 
 ### Mixed-mode policies
+
 - Mixed selections (line + block comment contexts) often appear in JSX/TSX.
 - `g:cmt_mixed_mode_policy` defines how those regions are handled:
-  - `"mixed"`: split the selection into segments based on each line’s mode.  
-  - `"first-line"`: inspect the first resolved line and apply that mode uniformly.  
+  - `"mixed"`: split the selection into segments based on each line’s mode.
+  - `"first-line"`: inspect the first resolved line and apply that mode uniformly.
   - `"line"` / `"block"`: force a single mode regardless of context.
+
 - Defaults: `typescriptreact` / `javascriptreact` use `"first-line"` so `gw` follows JSX opening lines; everything else remains `"mixed"`.
 
+### Commenting blank lines
+
+- Use `<Plug>(cmt:line:toggle:with-blank)` / `<Plug>(cmt:block:toggle:with-blank)` (mapped to `gC`/`gW` above) when you also want blank lines to be commented.
+- Line comments insert only the prefix (e.g. `//`) while block comments emit a literal `/* */` spacer to keep regions readable.
+- Operator, visual, and current-line variants exist so you can keep parity with the default mappings.
+
 ### Smart open comment (`gco` / `gcO`)
+
 - Uses the same resolution pipeline as toggles.
 - Adds an extra space by default (`g:cmt_eol_insert_pad_space = true`) so typing after the leader stays aligned. Set it to `false` to skip padding.
 
 ### Fallbacks & logging
+
 - If a filetype is listed in `g:cmt_disabled_filetypes`, cmt.nvim steps aside and lets stock `gc` handle everything.
 - Errors (missing Tree-sitter, invalid `commentstring`, etc.) are logged via `vim.notify`. Adjust verbosity with `g:cmt_log_level`.
 - `:CmtInfo` reports the current filetype, resolved mode, prefix/suffix, and source (Tree-sitter, fallback, buffer option, etc.).
@@ -96,14 +112,14 @@ All mappings are defined as `<Plug>` targets under `plugin/cmt.vim`, so feel fre
 
 ## Configuration Reference
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `g:cmt_mixed_mode_policy` | `{ typescriptreact = "first-line", javascriptreact = "first-line", default = "mixed" }` | Dict or string controlling mixed-region behaviour (`"mixed"`, `"first-line"`, `"line"`, `"block"`). |
-| `g:cmt_block_fallback` | `{}` | Per-filetype fallback commentstrings, e.g. `{ tsx = { line = "// %s", block = { "{/*", "*/}" } } }`. |
-| `g:cmt_disabled_filetypes` | `{}` | Filetypes that should bypass cmt.nvim entirely. |
-| `g:cmt_eol_insert_pad_space` | `true` | Adds a trailing space when inserting `gco` / `gcO`. |
-| `g:cmt_log_level` | `"warn"` | Logging threshold (`"error"`, `"warn"`, `"info"`, `"debug"`). |
-| `g:cmt_toggle_highlight` | `{ enabled = true, duration = 200, groups = { comment = "CmtToggleCommented", uncomment = "CmtToggleUncommented" } }` | Controls the transient highlight applied to the most recent toggle. |
+| Variable                     | Default                                                                                                               | Purpose                                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `g:cmt_mixed_mode_policy`    | `{ typescriptreact = "first-line", javascriptreact = "first-line", default = "mixed" }`                               | Dict or string controlling mixed-region behaviour (`"mixed"`, `"first-line"`, `"line"`, `"block"`).  |
+| `g:cmt_block_fallback`       | `{}`                                                                                                                  | Per-filetype fallback commentstrings, e.g. `{ tsx = { line = "// %s", block = { "{/*", "*/}" } } }`. |
+| `g:cmt_disabled_filetypes`   | `{}`                                                                                                                  | Filetypes that should bypass cmt.nvim entirely.                                                      |
+| `g:cmt_eol_insert_pad_space` | `true`                                                                                                                | Adds a trailing space when inserting `gco` / `gcO`.                                                  |
+| `g:cmt_log_level`            | `"warn"`                                                                                                              | Logging threshold (`"error"`, `"warn"`, `"info"`, `"debug"`).                                        |
+| `g:cmt_toggle_highlight`     | `{ enabled = true, duration = 200, groups = { comment = "CmtToggleCommented", uncomment = "CmtToggleUncommented" } }` | Controls the transient highlight applied to the most recent toggle.                                  |
 
 Example configuration focusing on React/Next.js buffers:
 

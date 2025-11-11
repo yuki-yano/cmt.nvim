@@ -4,7 +4,7 @@ local highlight = require("cmt.highlight")
 local Ops = {}
 
 local state = {
-  pending_kind = nil,
+  pending = nil,
 }
 
 local level_order = {
@@ -112,8 +112,49 @@ local function normalize_range(range)
   return { start_line = start_line, end_line = end_line }
 end
 
-local function perform(kind, scope, range)
-  kind = normalize_kind(kind)
+local function normalize_policy_value(value)
+  if type(value) ~= "string" then
+    return nil
+  end
+  local lowered = string.lower(value)
+  if lowered == "block" or lowered == "line" or lowered == "mixed" or lowered == "first-line" then
+    return lowered
+  end
+end
+
+local function prepare_call(call)
+  if type(call) == "table" and call._prepared then
+    return call
+  end
+  if type(call) == "table" then
+    local copy = vim.deepcopy(call)
+    local raw_kind = copy.kind or copy.mode or "line"
+    copy.kind = nil
+    copy.mode = nil
+    local policy = copy.policy or copy.mixed_policy
+    copy.policy = nil
+    copy.mixed_policy = nil
+    if vim.tbl_isempty(copy) then
+      copy = nil
+    end
+    return {
+      kind = normalize_kind(raw_kind),
+      options = copy,
+      policy = normalize_policy_value(policy),
+      _prepared = true,
+    }
+  end
+  return {
+    kind = normalize_kind(call or "line"),
+    options = nil,
+    policy = nil,
+    _prepared = true,
+  }
+end
+
+local function perform(call, scope, range)
+  local call_info = prepare_call(call)
+  local kind = call_info.kind
   scope = scope or "operator"
   if is_disabled() then
     if kind == "line" then
@@ -124,8 +165,8 @@ local function perform(kind, scope, range)
     return
   end
   local resolved_range = normalize_range(range)
-  local policy = resolve_mixed_policy(kind)
-  local ok, result = pcall(service.toggle, kind, resolved_range, policy)
+  local policy = call_info.policy or resolve_mixed_policy(kind)
+  local ok, result = pcall(service.toggle, kind, resolved_range, policy, call_info.options)
   if not ok then
     log("error", "cmt.nvim: toggle request failed (" .. tostring(result) .. ")")
     fallback_gc(scope)
@@ -146,8 +187,8 @@ local function perform(kind, scope, range)
   end
 end
 
-function Ops.operator(kind)
-  state.pending_kind = normalize_kind(kind)
+function Ops.operator(call)
+  state.pending = prepare_call(call)
   vim.go.operatorfunc = "v:lua.require'cmt.ops'._operator"
   return "g@"
 end
@@ -155,25 +196,28 @@ end
 function Ops._operator(type)
   local start_pos = vim.fn.getpos("'[")
   local end_pos = vim.fn.getpos("']")
-  perform(state.pending_kind or "line", type == "line" and "line" or "operator", {
+  local call = state.pending or prepare_call("line")
+  perform(call, type == "line" and "line" or "operator", {
     start_line = start_pos[2],
     end_line = end_pos[2],
   })
-  state.pending_kind = nil
+  state.pending = nil
 end
 
-function Ops.visual(kind)
+function Ops.visual(call)
   local start_line, end_line, mode = visual_range()
   leave_visual_if_needed(mode)
-  perform(kind, "visual", {
+  local call_info = prepare_call(call)
+  perform(call_info, "visual", {
     start_line = start_line,
     end_line = end_line,
   })
 end
 
-function Ops.current(kind)
+function Ops.current(call)
   local line = vim.fn.line(".")
-  perform(kind, "current", {
+  local call_info = prepare_call(call)
+  perform(call_info, "current", {
     start_line = line,
     end_line = line,
   })

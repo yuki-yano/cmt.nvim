@@ -75,8 +75,8 @@ describe("cmt.service first-line policy", function()
     package.loaded["cmt.service"] = nil
     Service = require("cmt.service")
     captured = nil
-    toggler.toggle_lines = function(lines, infos, preferred, policy)
-      captured = { infos = infos, preferred = preferred, policy = policy }
+    toggler.toggle_lines = function(lines, infos, preferred, policy, options)
+      captured = { infos = infos, preferred = preferred, policy = policy, options = options }
       return { lines = lines, action = "comment" }
     end
     bufnr = vim.api.nvim_create_buf(false, true)
@@ -180,6 +180,26 @@ describe("cmt.service behaviors", function()
     assert.equals(1, result.payload.start_line)
     assert.equals(2, result.payload.end_line)
     assert.equals("comment", result.payload.action)
+  end)
+
+  it("passes toggle options through to the toggler", function()
+    with_comment_infos(line_infos)
+    local toggler_module = require("cmt.toggler")
+    local original = toggler_module.toggle_lines
+    local captured
+    toggler_module.toggle_lines = function(lines, infos, preferred, policy, options)
+      captured = options
+      return original(lines, infos, preferred, policy)
+    end
+
+    local result = Service.toggle("line", { start_line = 1, end_line = 2 }, "mixed", {
+      include_blank_lines = true,
+    })
+    assert.equals("ok", result.status)
+    assert.is_truthy(captured)
+    assert.is_true(captured.include_blank_lines)
+
+    toggler_module.toggle_lines = original
   end)
 
   it("open_comment injects padding only when configured", function()
