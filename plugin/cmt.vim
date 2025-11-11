@@ -16,18 +16,30 @@ if has('nvim')
   highlight default link CmtToggleUncommented DiffDelete
 endif
 
-nnoremap <silent> <expr> <Plug>(cmt:line:toggle:operator) luaeval("require('cmt.ops').operator_expr('line')")
-xmap <silent> <Plug>(cmt:line:toggle:visual) <Cmd>lua require('cmt.ops').visual_entry('line')<CR>
-nnoremap <silent> <expr> <Plug>(cmt:block:toggle:operator) luaeval("require('cmt.ops').operator_expr('block')")
-xmap <silent> <Plug>(cmt:block:toggle:visual) <Cmd>lua require('cmt.ops').visual_entry('block')<CR>
+function! s:cmt_call_expr(kind, with_blank) abort
+  if a:with_blank
+    return printf("{ kind = '%s', include_blank_lines = true }", a:kind)
+  endif
+  return printf("'%s'", a:kind)
+endfunction
 
-nmap <silent> <Plug>(cmt:line:toggle) <Plug>(cmt:line:toggle:operator)
-xmap <silent> <Plug>(cmt:line:toggle) <Plug>(cmt:line:toggle:visual)
-nmap <silent> <Plug>(cmt:block:toggle) <Plug>(cmt:block:toggle:operator)
-xmap <silent> <Plug>(cmt:block:toggle) <Plug>(cmt:block:toggle:visual)
+function! s:cmt_define_toggle(kind, with_blank) abort
+  let l:extra = a:with_blank ? ':with-blank' : ''
+  let l:call = s:cmt_call_expr(a:kind, a:with_blank)
 
-nmap <silent> <Plug>(cmt:line:toggle:current) <Cmd>lua require('cmt.ops').current_entry('line')<CR>
-nmap <silent> <Plug>(cmt:block:toggle:current) <Cmd>lua require('cmt.ops').current_entry('block')<CR>
+  execute printf("nnoremap <silent> <expr> <Plug>(cmt:%s:toggle%s:operator) luaeval(\"require('cmt.ops').operator_expr(%s)\")", a:kind, l:extra, l:call)
+  execute printf("xmap <silent> <Plug>(cmt:%s:toggle%s:visual) <Cmd>lua require('cmt.ops').visual_entry(%s)<CR>", a:kind, l:extra, l:call)
+
+  execute printf("nmap <silent> <Plug>(cmt:%s:toggle%s) <Plug>(cmt:%s:toggle%s:operator)", a:kind, l:extra, a:kind, l:extra)
+  execute printf("xmap <silent> <Plug>(cmt:%s:toggle%s) <Plug>(cmt:%s:toggle%s:visual)", a:kind, l:extra, a:kind, l:extra)
+
+  execute printf("nnoremap <silent> <Plug>(cmt:%s:toggle%s:current) <Cmd>lua require('cmt.ops').current_entry(%s)<CR>", a:kind, l:extra, l:call)
+endfunction
+
+call s:cmt_define_toggle('line', v:false)
+call s:cmt_define_toggle('block', v:false)
+call s:cmt_define_toggle('line', v:true)
+call s:cmt_define_toggle('block', v:true)
 
 nmap <silent> <Plug>(cmt:open-below-comment) <Cmd>lua require('cmt.ops').open('below')<CR>
 nmap <silent> <Plug>(cmt:open-above-comment) <Cmd>lua require('cmt.ops').open('above')<CR>

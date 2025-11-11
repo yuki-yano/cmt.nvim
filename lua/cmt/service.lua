@@ -131,7 +131,7 @@ local function current_line_info(preferred_kind)
   return bufnr, line, single_line_info(bufnr, line, preferred_kind or "line")
 end
 
-function Service.toggle(preferred_kind, range, mixed_policy)
+function Service.toggle(preferred_kind, range, mixed_policy, options)
   preferred_kind = preferred_kind == "block" and "block" or "line"
   range = range or {}
   local bufnr = vim.api.nvim_get_current_buf()
@@ -161,7 +161,7 @@ function Service.toggle(preferred_kind, range, mixed_policy)
     }
   end
 
-  local result = toggler.toggle_lines(lines, infos, preferred_kind, policy)
+  local result = toggler.toggle_lines(lines, infos, preferred_kind, policy, options)
   vim.api.nvim_buf_set_lines(bufnr, start_line - 1, end_line, false, result.lines)
   return {
     status = "ok",

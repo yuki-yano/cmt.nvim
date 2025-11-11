@@ -10,6 +10,11 @@ local function make_info(mode, prefix, suffix)
   }
 end
 
+local function expect_block_blank(line, reference)
+  assert.is_truthy(line:match("^/%* %s+%*/$"), "expected block blank comment")
+  assert.equals(#reference, #line, "block blank width mismatch")
+end
+
 describe("cmt.toggler.toggle_lines", function()
   it("adds line comments when not present", function()
     local result = toggler.toggle_lines({
@@ -283,6 +288,61 @@ describe("cmt.toggler.toggle_lines", function()
     }, commented.lines)
     local uncommented = toggler.toggle_lines(commented.lines, infos, "line")
     assert.are.same(lines, uncommented.lines)
+  end)
+
+
+  it("includes blank lines when requested for line comments", function()
+    local source = {
+      "export const add = (a: number, b: number) => {",
+      "  return a + b",
+      "",
+      "  // trailing logic",
+      "}",
+    }
+    local infos = {}
+    for idx = 1, #source do
+      infos[idx] = make_info("line", "//")
+    end
+
+    local commented = toggler.toggle_lines(source, infos, "line", "mixed", {
+      include_blank_lines = true,
+    })
+    assert.are.same({
+      "// export const add = (a: number, b: number) => {",
+      "//   return a + b",
+      "//",
+      "//   // trailing logic",
+      "// }",
+    }, commented.lines)
+
+    local uncommented = toggler.toggle_lines(commented.lines, infos, "line", "mixed", {
+      include_blank_lines = true,
+    })
+    assert.are.same(source, uncommented.lines)
+  end)
+
+  it("includes blank lines when requested for block comments", function()
+    local source = {
+      "alpha()",
+      "",
+      "peach()",
+    }
+    local infos = {}
+    for idx = 1, #source do
+      infos[idx] = make_info("block", "/*", "*/")
+    end
+
+    local commented = toggler.toggle_lines(source, infos, "block", "mixed", {
+      include_blank_lines = true,
+    })
+    assert.equals("/* alpha() */", commented.lines[1])
+    assert.equals("/* peach() */", commented.lines[3])
+    expect_block_blank(commented.lines[2], commented.lines[1])
+
+    local uncommented = toggler.toggle_lines(commented.lines, infos, "block", "mixed", {
+      include_blank_lines = true,
+    })
+    assert.are.same(source, uncommented.lines)
   end)
 
   it("uses preferred mode when first-line policy lacks info", function()

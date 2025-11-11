@@ -99,7 +99,7 @@ local function preprocess_lines(lines)
   end
   local shared_indent = longest_common_indent(indents)
   for _, entry in ipairs(entries) do
-    entry.anchorable = entry.indent:sub(1, #shared_indent) == shared_indent
+    entry.anchorable = entry.blank or entry.indent:sub(1, #shared_indent) == shared_indent
     local extra = entry.indent:sub(#shared_indent + 1)
     entry.extra_indent = extra
     if entry.blank then
@@ -139,7 +139,9 @@ local function render_entry(entry, shared_indent, opts)
   return text
 end
 
-local function align_line_comments(entries, infos, shared_indent)
+local function align_line_comments(entries, infos, shared_indent, opts)
+  opts = opts or {}
+  local include_blank = opts.include_blank_lines
   local primary
   for _, info in ipairs(infos) do
     if info and info.mode == "line" then
@@ -150,7 +152,7 @@ local function align_line_comments(entries, infos, shared_indent)
   primary = primary or infos[1] or { prefix = "", suffix = "", mode = "line" }
   local output = {}
   for idx, entry in ipairs(entries) do
-    if entry.blank then
+    if entry.blank and not include_blank then
       output[idx] = entry.original
     else
       local info = infos[idx]
@@ -201,7 +203,9 @@ local function remove_block_comment(line, info)
   return indent .. extra_indent .. inner
 end
 
-local function add_block_comments(entries, infos, shared_indent)
+local function add_block_comments(entries, infos, shared_indent, opts)
+  opts = opts or {}
+  local include_blank = opts.include_blank_lines
   local widths = {}
   local max_width = 0
   for idx, entry in ipairs(entries) do
@@ -220,26 +224,37 @@ local function add_block_comments(entries, infos, shared_indent)
       max_width = width
     end
   end
+
+  local function render_block_line(entry, info, body, suffix_pad, force_pad)
+    return render_entry(entry, shared_indent, {
+      prefix = info.prefix or "",
+      pad = force_pad and " " or nil,
+      body = body,
+      tail = suffix_pad,
+      suffix = info.suffix or "",
+      trim = true,
+    })
+  end
+
   local output = {}
   for idx, entry in ipairs(entries) do
+    local info = infos[idx]
+    local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
+    local suffix_pad = string.rep(" ", suffix_pad_length)
     if entry.blank then
-      output[idx] = entry.original
+      if not include_blank then
+        output[idx] = entry.original
+      else
+        output[idx] = render_block_line(entry, info, "", suffix_pad, true)
+      end
     else
       local body = entry.relative or ""
-      local info = infos[idx]
-      local suffix_pad_length = math.max(max_width - (widths[idx] or 0) + 1, 1)
-      local suffix_pad = string.rep(" ", suffix_pad_length)
-      output[idx] = render_entry(entry, shared_indent, {
-        prefix = info.prefix or "",
-        body = body,
-        tail = suffix_pad,
-        suffix = info.suffix or "",
-        trim = true,
-      })
+      output[idx] = render_block_line(entry, info, body, suffix_pad, false)
     end
   end
   return output
 end
+
 
 local function segment_modes(infos)
   local modes = {}
@@ -253,10 +268,16 @@ local function segment_modes(infos)
   return modes
 end
 
-local function run_line_mode(lines, infos)
+local function run_line_mode(lines, infos, opts)
+  opts = opts or {}
+  local include_blank = opts.include_blank_lines
   local default_info = infos[1] or { prefix = "", suffix = "", mode = "line" }
   local already = true
   for idx, line in ipairs(lines) do
+    if include_blank and is_blank(line) then
+      already = false
+      break
+    end
     if not is_line_commented(line, infos[idx] or default_info) then
       already = false
       break
@@ -270,12 +291,14 @@ local function run_line_mode(lines, infos)
     end
   else
     local entries, shared_indent = preprocess_lines(lines)
-    updated = align_line_comments(entries, infos, shared_indent)
+    updated = align_line_comments(entries, infos, shared_indent, opts)
   end
   return { lines = updated, already = already }
 end
 
-local function run_block_mode(lines, infos)
+local function run_block_mode(lines, infos, opts)
+  opts = opts or {}
+  local include_blank = opts.include_blank_lines
   local primary
   for _, info in ipairs(infos) do
     if info and info.mode == "block" then
@@ -295,6 +318,10 @@ local function run_block_mode(lines, infos)
   end
   local already = true
   for idx, line in ipairs(lines) do
+    if include_blank and is_blank(line) then
+      already = false
+      break
+    end
     if not is_block_commented(line, block_infos[idx]) then
       already = false
       break
@@ -308,19 +335,19 @@ local function run_block_mode(lines, infos)
     end
   else
     local entries, shared_indent = preprocess_lines(lines)
-    updated = add_block_comments(entries, block_infos, shared_indent)
+    updated = add_block_comments(entries, block_infos, shared_indent, opts)
   end
   return { lines = updated, already = already }
 end
 
-local function run_uniform_mode(mode, lines, infos)
+local function run_uniform_mode(mode, lines, infos, opts)
   if mode == "block" then
-    return run_block_mode(lines, infos)
+    return run_block_mode(lines, infos, opts)
   end
-  return run_line_mode(lines, infos)
+  return run_line_mode(lines, infos, opts)
 end
 
-local function run_mixed_mode(lines, infos)
+local function run_mixed_mode(lines, infos, opts)
   local modes = segment_modes(infos)
   local segments = {}
   local start_idx = 1
@@ -344,7 +371,7 @@ local function run_mixed_mode(lines, infos)
       slice_lines[#slice_lines + 1] = lines[idx]
       slice_infos[#slice_infos + 1] = infos[idx]
     end
-    local result = run_uniform_mode(segment.mode, slice_lines, slice_infos)
+    local result = run_uniform_mode(segment.mode, slice_lines, slice_infos, opts)
     for idx = 0, #result.lines - 1 do
       output[segment.start + idx] = result.lines[idx + 1]
     end
@@ -354,7 +381,7 @@ local function run_mixed_mode(lines, infos)
   return { lines = output, already = all_already }
 end
 
-function Toggler.toggle_lines(lines, infos, preferred, mixed_policy)
+function Toggler.toggle_lines(lines, infos, preferred, mixed_policy, options)
   if not lines or #lines == 0 then
     return { lines = lines or {}, action = "comment" }
   end
@@ -362,17 +389,17 @@ function Toggler.toggle_lines(lines, infos, preferred, mixed_policy)
   mixed_policy = mixed_policy or "mixed"
 
   if mixed_policy == "mixed" then
-    local result = run_mixed_mode(lines, infos)
+    local result = run_mixed_mode(lines, infos, options)
     return { lines = result.lines, action = result.already and "uncomment" or "comment" }
   elseif mixed_policy == "first-line" then
     local fallback_mode = preferred == "block" and "block" or "line"
     local target_mode = mode_from_info(infos[1], fallback_mode)
-    local result = run_uniform_mode(target_mode, lines, infos)
+    local result = run_uniform_mode(target_mode, lines, infos, options)
     return { lines = result.lines, action = result.already and "uncomment" or "comment" }
   end
 
   local target_mode = mixed_policy == "block" and "block" or "line"
-  local result = run_uniform_mode(target_mode, lines, infos)
+  local result = run_uniform_mode(target_mode, lines, infos, options)
   return { lines = result.lines, action = result.already and "uncomment" or "comment" }
 end
 
